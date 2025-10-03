@@ -3,6 +3,7 @@
 These tests verify that the library can communicate with an MCP server.
 Note: These tests require a mock or real Drasi MCP server to be available.
 """
+# pyright: reportPossiblyUnboundVariable=false, reportOptionalMemberAccess=false, reportCallIssue=false, reportInvalidTypeForm=false, reportGeneralTypeIssues=false, reportArgumentType=false
 
 import pytest
 
@@ -13,6 +14,9 @@ try:
     from langchain_drasi.exceptions import MCPConnectionError
     IMPORTS_AVAILABLE = True
 except ImportError:
+    MCPClient = object  # type: ignore[misc,assignment]
+    MCPConnectionConfig = object  # type: ignore[misc,assignment]
+    MCPConnectionError = Exception  # type: ignore[misc,assignment]
     IMPORTS_AVAILABLE = False
 
 

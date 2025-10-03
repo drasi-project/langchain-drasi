@@ -1,4 +1,4 @@
-.PHONY: help install dev-install update build test test-unit test-integration test-contract clean example-simple example-langchain example-langgraph lint format publish publish-test
+.PHONY: help install dev-install update build test test-unit test-integration test-contract clean example-simple example-langchain example-langgraph lint format typecheck publish publish-test
 
 help:
 	@echo "Available targets:"
@@ -10,7 +10,8 @@ help:
 	@echo "  test-unit        - Run unit tests only"
 	@echo "  test-integration - Run integration tests only"
 	@echo "  test-contract    - Run contract tests only"
-	@echo "  lint             - Run linting checks"
+	@echo "  lint             - Run linting checks (ruff + mypy + pyright)"
+	@echo "  typecheck        - Run type checking (pyright)"
 	@echo "  format           - Format code"
 	@echo "  clean            - Remove build artifacts"
 	@echo "  example-simple   - Run simple example"
@@ -47,6 +48,10 @@ test-contract:
 lint:
 	uv run ruff check src/ tests/ examples/
 	uv run mypy src/
+	uv run pyright
+
+typecheck:
+	uv run pyright
 
 format:
 	uv run ruff format src/ tests/ examples/
@@ -59,6 +64,8 @@ clean:
 	rm -rf .pytest_cache
 	rm -rf .mypy_cache
 	rm -rf .ruff_cache
+	rm -rf .pyright_cache
+	rm -rf pyrightconfig.json
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
 

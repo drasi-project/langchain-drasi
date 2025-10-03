@@ -6,7 +6,7 @@ to discover, read, and subscribe to Drasi continuous queries via MCP.
 
 import logging
 from enum import Enum
-from typing import Any
+from typing import Any, Optional, Type
 
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
@@ -102,7 +102,7 @@ class DrasiTool(BaseTool):
         "Use 'discover' to list available queries, 'read' to get current results, "
         "'subscribe' to receive real-time updates, or 'unsubscribe' to stop updates."
     )
-    args_schema: type[BaseModel] = DrasiQueryInput
+    args_schema: type[BaseModel] = DrasiQueryInput  # type: ignore[assignment]
 
     # Custom attributes (using Any to avoid Pydantic validation issues with Protocol types)
     mcp_config: MCPConnectionConfig

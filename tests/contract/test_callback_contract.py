@@ -4,6 +4,7 @@ These tests verify that callback handler protocols and base classes
 implement the required interface as specified in contracts/callbacks.md.
 These tests MUST FAIL initially until the callbacks module is implemented.
 """
+# pyright: reportPossiblyUnboundVariable=false, reportGeneralTypeIssues=false
 
 from typing import Protocol
 
@@ -19,6 +20,10 @@ try:
     )
     IMPORTS_AVAILABLE = True
 except ImportError:
+    AsyncBaseDrasiNotificationHandler = object  # type: ignore[misc,assignment]
+    AsyncDrasiNotificationHandler = object  # type: ignore[misc,assignment]
+    BaseDrasiNotificationHandler = object  # type: ignore[misc,assignment]
+    DrasiNotificationHandler = object  # type: ignore[misc,assignment]
     IMPORTS_AVAILABLE = False
 
 

@@ -4,6 +4,7 @@ These tests verify that DrasiTool implements the required interface
 as specified in contracts/python-api.md. These tests MUST FAIL initially
 until the DrasiTool implementation is complete.
 """
+# pyright: reportAttributeAccessIssue=false, reportArgumentType=false, reportCallIssue=false
 
 
 import pytest
@@ -18,6 +19,14 @@ try:
     from langchain_drasi.tool import DrasiQueryInput, DrasiTool, create_drasi_tool
     IMPORTS_AVAILABLE = True
 except ImportError:
+    # Provide stubs for type checking
+    BaseTool = object  # type: ignore[misc,assignment]
+    MCPConnectionConfig = object  # type: ignore[misc,assignment]
+    QueryInfo = dict  # type: ignore[misc,assignment]
+    QueryResult = dict  # type: ignore[misc,assignment]
+    DrasiQueryInput = object  # type: ignore[misc,assignment]
+    DrasiTool = object  # type: ignore[misc,assignment]
+    create_drasi_tool = lambda *args, **kwargs: None  # type: ignore[misc,assignment]
     IMPORTS_AVAILABLE = False
 
 
@@ -78,7 +87,7 @@ class TestDrasiToolContract:
                 pass
 
         handler = DummyHandler()
-        tool = DrasiTool(mcp_config=config, notification_handlers=[handler])
+        tool = DrasiTool(mcp_config=config, notification_handlers=[handler])  # type: ignore[arg-type]
         assert tool is not None, "Tool should accept handlers"
         assert hasattr(tool, "notification_handlers"), "Tool should store handlers"
 

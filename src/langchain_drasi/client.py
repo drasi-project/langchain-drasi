@@ -5,13 +5,14 @@ functionality for connecting to remote HTTP-based MCP servers, listing queries,
 reading results, and managing subscriptions.
 """
 
+import json
 import logging
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
 from mcp import ClientSession, ResourceUpdatedNotification, ServerNotification
 from mcp.client.streamable_http import streamablehttp_client
-from mcp.types import JSONRPCNotification
-from mcp.shared.session import RequestResponder
+from mcp.types import ResourceUpdatedNotificationParams, TextResourceContents
+from pydantic import AnyUrl
 
 from .config import MCPConnectionConfig
 from .exceptions import MCPConnectionError, QueryNotFoundError
@@ -51,19 +52,24 @@ class DrasiClientSession(ClientSession):
 
         # Check if this is a ResourceUpdatedNotification
         if isinstance(actual_notif, ResourceUpdatedNotification):
-            params = actual_notif.params if hasattr(actual_notif, 'params') else {}
+            params: ResourceUpdatedNotificationParams | None = getattr(actual_notif, 'params', None)
 
-            if params.uri.scheme == "drasi":
+            if params and hasattr(params, 'uri') and params.uri.scheme == "drasi":
             
                 logger.debug(f"Detected Drasi notification with params: {params}")
                 if self._drasi_notification_callback:
-                    
-                    change_notification = ChangeNotification()
-                    change_notification.change_type = ChangeType(params.model_extra.get("operation")) 
-                    change_notification.query_name = params.uri.path.lstrip("/").split("/")[-1]  # Extract query name from URI
-                    change_notification.data = params.model_extra.get("data")
+                    model_extra = getattr(params, 'model_extra', None) or {}
+                    uri_path = params.uri.path if hasattr(params.uri, 'path') else ""
 
-                    logger.info(f"Routing Drasi notification: {params.uri} - {params.model_extra.get('operation')}")
+                    change_notification = ChangeNotification()
+                    operation = model_extra.get("operation") if isinstance(model_extra, dict) else None
+                    if operation:
+                        change_notification.change_type = ChangeType(operation)
+                    change_notification.query_name = uri_path.lstrip("/").split("/")[-1] if uri_path else ""  # Extract query name from URI
+                    data = model_extra.get("data") if isinstance(model_extra, dict) else None
+                    change_notification.data = data if isinstance(data, dict) else {}
+
+                    logger.info(f"Routing Drasi notification: {params.uri} - {operation}")
                     self._drasi_notification_callback(change_notification)
                     return
 
@@ -161,10 +167,11 @@ class MCPClient:
         except Exception as e:
             # Extract useful error message from ExceptionGroup if present
             error_msg = str(e)
-            if hasattr(e, 'exceptions') and e.exceptions:
+            if isinstance(e, ExceptionGroup):
                 # Get the first underlying exception for better error message
-                underlying = e.exceptions[0]
-                error_msg = f"{type(underlying).__name__}: {str(underlying)}"
+                if e.exceptions:
+                    underlying = e.exceptions[0]
+                    error_msg = f"{type(underlying).__name__}: {str(underlying)}"
 
             raise MCPConnectionError(
                 f"Failed to connect to MCP server at {self.config.server_url}: {error_msg}",
@@ -235,7 +242,7 @@ class MCPClient:
                 query_info: QueryInfo = {
                     "name": resource.name,
                     "title": getattr(resource, "title", resource.name),
-                    "uri": resource.uri,
+                    "uri": str(resource.uri),
                     "description": resource.description or "",
                     "mime_type": resource.mimeType or "application/json",
                 }
@@ -269,13 +276,12 @@ class MCPClient:
             logger.debug(f"Reading resource: {uri}")
 
             # Call MCP resources/read
-            response = await session.read_resource(uri)
+            uri_obj = AnyUrl(uri) if isinstance(uri, str) else uri
+            response = await session.read_resource(uri_obj)
 
             if not response.contents:
-                raise QueryNotFoundError(
-                    f"No content returned for query: {uri}",
-                    details={"uri": uri},
-                )
+                query_name = uri.split("/")[-1] if "/" in uri else uri
+                raise QueryNotFoundError(query_name)
 
             # Parse content (first content item)
             content_item = response.contents[0]
@@ -283,9 +289,15 @@ class MCPClient:
             # Extract query name from URI
             query_name = uri.split("/")[-1] if "/" in uri else uri
 
-            # Parse JSON content
-            import json
-            content_data = json.loads(content_item.text)
+            # Parse JSON content - check if it's TextResourceContents
+            if isinstance(content_item, TextResourceContents):
+                content_data = json.loads(content_item.text)
+            else:
+                # Handle blob content
+                raise MCPConnectionError(
+                    f"Unexpected content type for query: {uri}",
+                    details={"uri": uri, "content_type": type(content_item).__name__},
+                )
 
             result: QueryResult = {
                 "query_name": query_name,
@@ -309,10 +321,8 @@ class MCPClient:
             # Check if it's a "not found" type error
             error_msg = str(e).lower()
             if "not found" in error_msg or "does not exist" in error_msg:
-                raise QueryNotFoundError(
-                    f"Query not found: {uri}",
-                    details={"uri": uri, "error": str(e)},
-                ) from e
+                query_name = uri.split("/")[-1] if "/" in uri else uri
+                raise QueryNotFoundError(query_name) from e
 
             raise MCPConnectionError(
                 f"Failed to read resource: {e}",
@@ -334,7 +344,8 @@ class MCPClient:
             logger.debug(f"Subscribing to resource: {uri}")
 
             # Call MCP resources/subscribe
-            await session.subscribe_resource(uri)
+            uri_obj = AnyUrl(uri) if isinstance(uri, str) else uri
+            await session.subscribe_resource(uri_obj)
 
             logger.info(f"Successfully subscribed to: {uri}")
 
@@ -359,7 +370,8 @@ class MCPClient:
             logger.debug(f"Unsubscribing from resource: {uri}")
 
             # Call MCP resources/unsubscribe
-            await session.unsubscribe_resource(uri)
+            uri_obj = AnyUrl(uri) if isinstance(uri, str) else uri
+            await session.unsubscribe_resource(uri_obj)
 
             logger.info(f"Successfully unsubscribed from: {uri}")
 

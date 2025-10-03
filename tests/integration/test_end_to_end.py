@@ -3,6 +3,7 @@
 These tests verify complete workflows from discovery through subscription
 and notification handling. They test the entire system working together.
 """
+# pyright: reportPossiblyUnboundVariable=false, reportOptionalMemberAccess=false, reportCallIssue=false, reportInvalidTypeForm=false, reportGeneralTypeIssues=false
 
 import asyncio
 from typing import Any
@@ -17,6 +18,11 @@ try:
     from langchain_drasi.tool import DrasiTool, create_drasi_tool
     IMPORTS_AVAILABLE = True
 except ImportError:
+    BaseDrasiNotificationHandler = object  # type: ignore[misc,assignment]
+    MCPConnectionConfig = object  # type: ignore[misc,assignment]
+    ChangeType = object  # type: ignore[misc,assignment]
+    DrasiTool = object  # type: ignore[misc,assignment]
+    create_drasi_tool = lambda *args, **kwargs: None  # type: ignore[misc,assignment]
     IMPORTS_AVAILABLE = False
 
 

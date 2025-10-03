@@ -28,7 +28,7 @@ logging.basicConfig(
     stream=sys.stdout
 )
 
-from langchain.agents import AgentExecutor, create_react_agent
+from langchain.agents import AgentExecutor, create_react_agent  # type: ignore[import-not-found]
 from langchain_core.prompts import PromptTemplate
 
 # Import Drasi components
@@ -38,12 +38,13 @@ from langchain_drasi import (
 )
 from langchain_drasi.handlers import ConsoleHandler
 
-# Import Azure OpenAI (can also use langchain_openai.ChatOpenAI)
+# Import OpenAI models
 try:
-    from langchain_openai import AzureChatOpenAI
+    from langchain_openai import AzureChatOpenAI, ChatOpenAI
     USE_AZURE = True
 except ImportError:
     from langchain_openai import ChatOpenAI
+    AzureChatOpenAI = ChatOpenAI  # type: ignore[misc,assignment]
     USE_AZURE = False
 
 
@@ -119,8 +120,8 @@ async def main() -> None:
     print("Initializing LLM...")
     if USE_AZURE:
         llm = AzureChatOpenAI(
-            azure_deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4"),
-            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview"),
+            azure_deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4"),  # type: ignore[call-arg]
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview"),  # type: ignore[call-arg]
             temperature=0,
         )
     else:

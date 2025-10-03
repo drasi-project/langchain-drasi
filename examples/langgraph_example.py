@@ -21,7 +21,7 @@ import asyncio
 import os
 import sys
 import logging
-from typing import TypedDict, Annotated, Any
+from typing import TypedDict, Annotated, Any, Mapping
 from dotenv import load_dotenv
 
 logging.basicConfig(
@@ -42,12 +42,13 @@ from langchain_drasi import (
 )
 from langchain_drasi.handlers import MemoryHandler
 
-# Import Azure OpenAI (can also use langchain_openai.ChatOpenAI)
+# Import OpenAI models
 try:
-    from langchain_openai import AzureChatOpenAI
+    from langchain_openai import AzureChatOpenAI, ChatOpenAI
     USE_AZURE = True
 except ImportError:
     from langchain_openai import ChatOpenAI
+    AzureChatOpenAI = ChatOpenAI  # type: ignore[misc,assignment]
     USE_AZURE = False
 
 
@@ -75,7 +76,7 @@ def should_continue(state: AgentState) -> str:
     last_message = state["messages"][-1]
 
     # If the last message has tool calls, continue
-    if hasattr(last_message, "tool_calls") and last_message.tool_calls:
+    if isinstance(last_message, AIMessage) and last_message.tool_calls:
         return "continue"
 
     # Otherwise, end
@@ -98,7 +99,7 @@ async def call_model(state: AgentState, llm: Any) -> dict:
     return {"messages": [response]}
 
 
-async def call_tool(state: AgentState, tools: dict[str, BaseTool]) -> dict:
+async def call_tool(state: AgentState, tools: Mapping[str, BaseTool]) -> dict:
     """Execute tool calls from the LLM.
 
     Args:
@@ -112,6 +113,9 @@ async def call_tool(state: AgentState, tools: dict[str, BaseTool]) -> dict:
 
     # Execute each tool call
     tool_messages = []
+
+    if not isinstance(last_message, AIMessage) or not last_message.tool_calls:
+        return {"messages": []}
 
     for tool_call in last_message.tool_calls:
         tool_name = tool_call["name"]
@@ -208,8 +212,8 @@ async def main() -> None:
     print("Initializing LLM...")
     if USE_AZURE:
         llm = AzureChatOpenAI(
-            azure_deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4"),
-            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview"),
+            azure_deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4"),  # type: ignore[call-arg]
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview"),  # type: ignore[call-arg]
             temperature=0,
         )
     else:

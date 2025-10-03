@@ -65,9 +65,9 @@ class QueryNotFoundError(DrasiError):
     ) -> None:
         """Initialize QueryNotFoundError with query details."""
         message = f"Query '{query_name}' not found"
-        details = {"query_name": query_name}
+        details: dict[str, Any] = {"query_name": query_name}
         if available_queries:
-            details["available_queries"] = available_queries
+            details["available_queries"] = available_queries  # type: ignore[assignment]
         super().__init__(message, details)
         self.query_name = query_name
         self.available_queries = available_queries

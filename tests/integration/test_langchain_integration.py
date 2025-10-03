@@ -4,18 +4,25 @@ These tests verify that DrasiTool integrates correctly with LangChain
 components like AgentExecutor and can be used in agent workflows.
 Note: These tests require DrasiTool implementation to be complete.
 """
+# pyright: reportPossiblyUnboundVariable=false, reportOptionalMemberAccess=false, reportCallIssue=false, reportInvalidTypeForm=false, reportAttributeAccessIssue=false, reportMissingImports=false
 
 import pytest
 
 # These imports will fail until modules are implemented
 try:
-    from langchain.agents import AgentExecutor, create_react_agent
+    from langchain.agents import AgentExecutor, create_react_agent  # type: ignore[import-not-found]
     from langchain_core.prompts import PromptTemplate
 
     from langchain_drasi.config import MCPConnectionConfig
     from langchain_drasi.tool import DrasiTool, create_drasi_tool
     IMPORTS_AVAILABLE = True
 except ImportError:
+    AgentExecutor = object  # type: ignore[misc,assignment]
+    create_react_agent = lambda *args, **kwargs: None  # type: ignore[misc,assignment]
+    PromptTemplate = object  # type: ignore[misc,assignment]
+    MCPConnectionConfig = object  # type: ignore[misc,assignment]
+    DrasiTool = object  # type: ignore[misc,assignment]
+    create_drasi_tool = lambda *args, **kwargs: None  # type: ignore[misc,assignment]
     IMPORTS_AVAILABLE = False
 
 
