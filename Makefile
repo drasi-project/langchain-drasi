@@ -1,4 +1,4 @@
-.PHONY: help install dev-install update build test test-fast test-unit test-integration test-contract clean example-simple example-langchain example-langgraph lint format typecheck publish publish-test
+.PHONY: help install dev-install update build test test-fast test-unit test-integration test-contract clean example-simple example-langchain example-react lint format typecheck publish publish-test
 
 help:
 	@echo "Available targets:"
@@ -17,7 +17,7 @@ help:
 	@echo "  clean            - Remove build artifacts"
 	@echo "  example-simple   - Run simple example"
 	@echo "  example-langchain - Run vanilla LangChain example"
-	@echo "  example-langgraph - Run LangGraph example"
+	@echo "  example-react    - Run interactive ReAct agent example"
 	@echo "  publish-test     - Publish to TestPyPI"
 	@echo "  publish          - Publish to PyPI"
 
@@ -79,7 +79,7 @@ example-simple:
 example-langchain:
 	uv run python examples/vanilla_langchain.py
 
-example-langgraph:
+example-react:
 	uv run python examples/langgraph_example.py
 
 publish-test: build

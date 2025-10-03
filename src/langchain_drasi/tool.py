@@ -37,22 +37,12 @@ class DrasiQueryInput(BaseModel):
     when invoked by an AI agent.
     """
 
-    query_name: str = Field(
-        default="",
+    input: str = Field(
         description=(
-            "Name of the Drasi query to operate on. "
-            "Leave empty for 'discover' operation to list all queries."
-        ),
-    )
-
-    operation: DrasiOperation = Field(
-        default=DrasiOperation.READ,
-        description=(
-            "Operation to perform: "
-            "'discover' lists all available queries, "
-            "'read' retrieves current query results, "
-            "'subscribe' starts receiving real-time updates, "
-            "'unsubscribe' stops receiving updates."
+            "Tool input in format: 'operation:query_name' or just 'operation'. "
+            "Operations: 'discover' (list all queries), 'read:query-name' (get results), "
+            "'subscribe:query-name' (get real-time updates), 'unsubscribe:query-name' (stop updates). "
+            "Examples: 'discover', 'read:active-orders', 'subscribe:freezerx'"
         ),
     )
 
@@ -99,8 +89,10 @@ class DrasiTool(BaseTool):
     name: str = "drasi_query"
     description: str = (
         "Access Drasi continuous queries to get real-time data insights. "
-        "Use 'discover' to list available queries, 'read' to get current results, "
-        "'subscribe' to receive real-time updates, or 'unsubscribe' to stop updates."
+        "Input format: 'operation:query_name' or just 'operation'. "
+        "Use 'discover' to list all queries, 'read:query-name' to get results, "
+        "'subscribe:query-name' for real-time updates, 'unsubscribe:query-name' to stop. "
+        "Examples: 'discover', 'read:active-orders', 'subscribe:freezerx'"
     )
     args_schema: type[BaseModel] = DrasiQueryInput  # type: ignore[assignment]
 
@@ -254,7 +246,7 @@ class DrasiTool(BaseTool):
                 details={"query_name": query_name, "error": str(e)},
             ) from e
 
-    def _run(self, query_name: str = "", operation: str = "read") -> str:
+    def _run(self, input: str) -> str:
         """Synchronous execution (not supported).
 
         DrasiTool requires async execution. Use _arun() or ainvoke() instead.
@@ -266,25 +258,31 @@ class DrasiTool(BaseTool):
             "DrasiTool only supports async execution. Use ainvoke() instead."
         )
 
-    async def _arun(
-        self, query_name: str = "", operation: str = "read"
-    ) -> str | list[QueryInfo] | QueryResult:
+    async def _arun(self, input: str) -> str | list[QueryInfo] | QueryResult:
         """Async execution of the tool.
 
         This is the main entry point when the tool is invoked by an agent.
 
         Args:
-            query_name: Name of the query (empty for discover)
-            operation: Operation to perform
+            input: Tool input in format 'operation:query_name' or just 'operation'
 
         Returns:
             Operation-specific result
 
         Raises:
-            ValueError: If operation is invalid
+            ValueError: If input format or operation is invalid
             QueryNotFoundError: If query doesn't exist
             SubscriptionError: If subscription operation fails
         """
+        # Parse input
+        if ":" in input:
+            operation, query_name = input.split(":", 1)
+            operation = operation.strip()
+            query_name = query_name.strip()
+        else:
+            operation = input.strip()
+            query_name = ""
+
         # Convert operation string to enum
         try:
             op = DrasiOperation(operation)

@@ -20,6 +20,8 @@ Usage:
 
 import asyncio
 import os
+import sys
+import logging
 from typing import Any
 from dotenv import load_dotenv
 
@@ -37,64 +39,27 @@ from langchain_drasi import (
 # Load environment variables
 load_dotenv()
 
+# logging.basicConfig(
+#     level=logging.DEBUG,
+#     format='%(asctime)s [%(name)s] %(levelname)s: %(message)s',
+#     stream=sys.stdout
+# )
 
-# Notification handler for real-time updates
+# Simple notification handler
 class ConsoleHandler(BaseDrasiNotificationHandler):
     """Handler that prints notifications to console."""
 
     def on_result_added(self, query_name: str, added_data: dict[str, Any]) -> None:
+        """Handle when results are added."""
         print(f"\n🆕 NOTIFICATION: Added to '{query_name}': {added_data}")
 
     def on_result_updated(self, query_name: str, updated_data: dict[str, Any]) -> None:
+        """Handle when results are updated."""
         print(f"\n🔄 NOTIFICATION: Updated in '{query_name}': {updated_data}")
 
     def on_result_deleted(self, query_name: str, deleted_data: dict[str, Any]) -> None:
-        print(f"\n🗑️  NOTIFICATION: Deleted from '{query_name}': {deleted_data}")
-
-
-class MemoryNotificationHandler(BaseDrasiNotificationHandler):
-    """Handler that buffers notifications to be added to the conversation."""
-
-    def __init__(self) -> None:
-        """Initialize handler with empty notification buffer."""
-        self.notifications: list[str] = []
-
-    def get_and_clear_notifications(self) -> list[str]:
-        """Get all buffered notifications and clear the buffer.
-
-        Returns:
-            List of notification messages
-        """
-        notifications = self.notifications.copy()
-        self.notifications.clear()
-        return notifications
-
-    def on_result_added(self, query_name: str, added_data: dict[str, Any]) -> None:
-        """Handle when results are added."""
-        import json
-        message = (
-            f"[System Notification] New result added to query '{query_name}': "
-            f"{json.dumps(added_data, indent=2)}"
-        )
-        self.notifications.append(message)
-
-    def on_result_updated(self, query_name: str, updated_data: dict[str, Any]) -> None:
-        """Handle when results are updated."""
-        import json
-        message = (
-            f"[System Notification] Result updated in query '{query_name}': "
-            f"{json.dumps(updated_data, indent=2)}"
-        )
-        self.notifications.append(message)
-
-    def on_result_deleted(self, query_name: str, deleted_data: dict[str, Any]) -> None:
         """Handle when results are deleted."""
-        import json
-        message = (
-            f"[System Notification] Result deleted from query '{query_name}': "
-            f"{json.dumps(deleted_data, indent=2)}"
-        )
-        self.notifications.append(message)
+        print(f"\n🗑️  NOTIFICATION: Deleted from '{query_name}': {deleted_data}")
 
 
 async def main() -> None:
@@ -116,20 +81,11 @@ async def main() -> None:
 
     print(f"Connecting to Drasi server: {server_url}")
 
-    # Create memory for conversation state
-    memory = MemorySaver()
-    thread_id = "drasi-chat"
-
-    # Create notification handlers:
-    # 1. Console handler to print notifications
-    # 2. Memory handler to buffer notifications for the conversation
-    console_handler = ConsoleHandler()
-    memory_handler = MemoryNotificationHandler()
-
-    # Create Drasi tool with both notification handlers
+    # Create Drasi tool with notification handler
+    notification_handler = ConsoleHandler()
     drasi_tool = create_drasi_tool(
         mcp_config=mcp_config,
-        notification_handlers=[console_handler, memory_handler],
+        notification_handlers=[notification_handler],
     )
 
     # Initialize LLM
@@ -138,6 +94,9 @@ async def main() -> None:
         api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview"),
         temperature=0,
     )
+
+    # Create memory for conversation state
+    memory = MemorySaver()
 
     # Create LangGraph ReAct agent
     print("Creating LangGraph ReAct agent...\n")
@@ -148,7 +107,7 @@ async def main() -> None:
     )
 
     # Configuration for conversation thread
-    config = {"configurable": {"thread_id": thread_id}}
+    config = {"configurable": {"thread_id": "drasi-chat"}}
 
     # Interactive loop
     print("Agent ready! You can ask questions about Drasi queries.\n")
@@ -156,8 +115,6 @@ async def main() -> None:
     print("  - What queries are available?")
     print("  - Read the results from query X")
     print("  - Subscribe to query Y for updates")
-    print("\nNote: Notifications are added to the conversation, so you can ask")
-    print("      the agent about them (e.g., 'What was the last notification?')")
     print()
 
     try:
@@ -175,30 +132,28 @@ async def main() -> None:
             if not user_input:
                 continue
 
-            # Run agent
+            # Run agent with streaming
             try:
-                # Get any buffered notifications and add them to the conversation
-                notifications = memory_handler.get_and_clear_notifications()
-                messages = []
+                print()  # Blank line before output
+                async for event in agent.astream(
+                    {"messages": [("user", user_input)]},
+                    config=config,
+                    stream_mode="values"
+                ):
+                    # Get the last message
+                    if "messages" in event and event["messages"]:
+                        last_message = event["messages"][-1]
+                        # Only print AI messages
+                        if hasattr(last_message, "type") and last_message.type == "ai":
+                            if hasattr(last_message, "content") and last_message.content:
+                                # Print the response (only once at the end)
+                                pass
 
-                # Add any pending notifications as system messages
-                for notification in notifications:
-                    messages.append(("system", notification))
-
-                # Add the user's message
-                messages.append(("user", user_input))
-
-                # Invoke the agent with all messages
-                result = await agent.ainvoke(
-                    {"messages": messages},
-                    config=config
-                )
-
-                # Print the final response
-                if "messages" in result and result["messages"]:
-                    last_message = result["messages"][-1]
+                # Print final response
+                if "messages" in event and event["messages"]:
+                    last_message = event["messages"][-1]
                     if hasattr(last_message, "content"):
-                        print(f"\n{last_message.content}")
+                        print(f"{last_message.content}")
 
             except Exception as e:
                 print(f"\n❌ Error: {e}")
