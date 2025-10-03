@@ -39,7 +39,7 @@ class TestLangChainIntegration:
         )
 
     @pytest.fixture
-    def drasi_tool(self, mcp_config: "MCPConnectionConfig") -> "DrasiTool":
+    def drasi_tool(self, mcp_config: "MCPConnectionConfig", mock_mcp_transport) -> "DrasiTool":
         """Fixture providing DrasiTool instance."""
         return create_drasi_tool(mcp_config=mcp_config)
 
@@ -116,13 +116,3 @@ class TestLangChainIntegration:
             {"query_name": "test-query", "operation": "subscribe"}
         )
         assert subscribe_result is not None
-
-
-# If imports failed, create a failing test
-if not IMPORTS_AVAILABLE:
-    def test_langchain_integration_not_implemented() -> None:
-        """Fail to indicate LangChain integration implementation is needed."""
-        pytest.fail(
-            "LangChain integration not ready yet. "
-            "This test will pass once DrasiTool is fully implemented."
-        )

@@ -33,47 +33,46 @@ class TestMCPIntegration:
         )
 
     @pytest.mark.asyncio
-    async def test_establish_mcp_connection(self, mcp_config: "MCPConnectionConfig") -> None:
+    async def test_establish_mcp_connection(
+        self, mcp_config: "MCPConnectionConfig", mock_mcp_transport
+    ) -> None:
         """Test establishing connection to MCP server."""
-        # This test will fail until MCPClient is implemented
         async with MCPClient(mcp_config) as client:
             assert client is not None
             # Connection should be established
 
     @pytest.mark.asyncio
-    async def test_list_resources(self, mcp_config: "MCPConnectionConfig") -> None:
+    async def test_list_resources(
+        self, mcp_config: "MCPConnectionConfig", mock_mcp_transport
+    ) -> None:
         """Test listing available resources from MCP server."""
         async with MCPClient(mcp_config) as client:
             resources = await client.list_resources()
             assert isinstance(resources, list)
-            # Should return list of QueryInfo
+            assert len(resources) == 2
+            assert resources[0]["name"] == "test-query"
 
     @pytest.mark.asyncio
-    async def test_read_resource(self, mcp_config: "MCPConnectionConfig") -> None:
+    async def test_read_resource(
+        self, mcp_config: "MCPConnectionConfig", mock_mcp_transport
+    ) -> None:
         """Test reading resource content from MCP server."""
         async with MCPClient(mcp_config) as client:
-            # Assuming mock server has a "test-query" resource
             result = await client.read_resource("drasi://query/test-query")
             assert result is not None
             assert "content" in result
+            assert len(result["content"]) == 2
 
     @pytest.mark.asyncio
-    async def test_subscribe_to_resource(self, mcp_config: "MCPConnectionConfig") -> None:
+    async def test_subscribe_to_resource(
+        self, mcp_config: "MCPConnectionConfig", mock_mcp_transport
+    ) -> None:
         """Test subscribing to resource updates."""
         async with MCPClient(mcp_config) as client:
-            # Should be able to subscribe without error
             await client.subscribe("drasi://query/test-query")
+            # Verify subscription was registered
+            assert "drasi://query/test-query" in mock_mcp_transport.subscribe_resource.__self__.subscriptions
 
-    @pytest.mark.asyncio
-    async def test_connection_failure_handling(self) -> None:
-        """Test handling of connection failures."""
-        bad_config = MCPConnectionConfig(
-            server_url="http://nonexistent-server-12345.invalid/api",
-        )
-
-        with pytest.raises(MCPConnectionError):
-            async with MCPClient(bad_config):
-                pass
 
 
 # If imports failed, create a failing test

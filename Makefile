@@ -1,4 +1,4 @@
-.PHONY: help install dev-install update build test test-unit test-integration test-contract clean example-simple example-langchain example-langgraph lint format typecheck publish publish-test
+.PHONY: help install dev-install update build test test-fast test-unit test-integration test-contract clean example-simple example-langchain example-langgraph lint format typecheck publish publish-test
 
 help:
 	@echo "Available targets:"
@@ -6,7 +6,8 @@ help:
 	@echo "  dev-install      - Install package with development dependencies"
 	@echo "  update           - Update all dependencies"
 	@echo "  build            - Build distribution packages"
-	@echo "  test             - Run all tests"
+	@echo "  test             - Run all tests (including integration)"
+	@echo "  test-fast        - Run tests excluding integration tests"
 	@echo "  test-unit        - Run unit tests only"
 	@echo "  test-integration - Run integration tests only"
 	@echo "  test-contract    - Run contract tests only"
@@ -35,6 +36,9 @@ build: clean
 
 test:
 	uv run pytest tests/ -v
+
+test-fast:
+	uv run pytest tests/ -v -m "not integration"
 
 test-unit:
 	uv run pytest tests/unit/ -v

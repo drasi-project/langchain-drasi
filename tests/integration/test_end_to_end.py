@@ -40,7 +40,7 @@ class TestEndToEndWorkflow:
 
     @pytest.mark.asyncio
     async def test_complete_discovery_read_workflow(
-        self, mcp_config: "MCPConnectionConfig"
+        self, mcp_config: "MCPConnectionConfig", mock_mcp_transport
     ) -> None:
         """Test complete workflow: discover queries → read query results."""
         tool = create_drasi_tool(mcp_config=mcp_config)
@@ -65,7 +65,7 @@ class TestEndToEndWorkflow:
 
     @pytest.mark.asyncio
     async def test_complete_subscribe_notify_workflow(
-        self, mcp_config: "MCPConnectionConfig"
+        self, mcp_config: "MCPConnectionConfig", mock_mcp_transport
     ) -> None:
         """Test complete workflow: subscribe → receive notification → callback invoked."""
 
@@ -107,7 +107,7 @@ class TestEndToEndWorkflow:
 
     @pytest.mark.asyncio
     async def test_multiple_subscriptions_workflow(
-        self, mcp_config: "MCPConnectionConfig"
+        self, mcp_config: "MCPConnectionConfig", mock_mcp_transport
     ) -> None:
         """Test workflow with multiple query subscriptions."""
 
@@ -139,7 +139,7 @@ class TestEndToEndWorkflow:
 
     @pytest.mark.asyncio
     async def test_unsubscribe_workflow(
-        self, mcp_config: "MCPConnectionConfig"
+        self, mcp_config: "MCPConnectionConfig", mock_mcp_transport
     ) -> None:
         """Test workflow: subscribe → unsubscribe → verify no more notifications."""
 
@@ -172,7 +172,7 @@ class TestEndToEndWorkflow:
 
     @pytest.mark.asyncio
     async def test_error_handling_workflow(
-        self, mcp_config: "MCPConnectionConfig"
+        self, mcp_config: "MCPConnectionConfig", mock_mcp_transport
     ) -> None:
         """Test workflow with error conditions."""
 
@@ -201,7 +201,9 @@ class TestEndToEndWorkflow:
             await tool.subscribe("invalid-query-name")
 
     @pytest.mark.asyncio
-    async def test_full_agent_workflow(self, mcp_config: "MCPConnectionConfig") -> None:
+    async def test_full_agent_workflow(
+        self, mcp_config: "MCPConnectionConfig", mock_mcp_transport
+    ) -> None:
         """Test complete agent workflow using DrasiTool."""
         tool = create_drasi_tool(mcp_config=mcp_config)
 
