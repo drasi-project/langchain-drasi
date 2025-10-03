@@ -63,7 +63,7 @@ from .exceptions import (
 )
 
 # Built-in handlers
-from .handlers import ConsoleHandler, LoggingHandler, MemoryHandler
+from .handlers import ConsoleHandler, LangGraphMemoryHandler, LoggingHandler, MemoryHandler
 
 # Models
 from .models import ChangeNotification, ChangeType, QueryInfo, QueryResult
@@ -114,6 +114,7 @@ __all__ = [
     "LoggingHandler",
     "ConsoleHandler",
     "MemoryHandler",
+    "LangGraphMemoryHandler",
     # Version
     "__version__",
 ]

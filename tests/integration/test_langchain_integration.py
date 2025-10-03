@@ -62,7 +62,7 @@ class TestLangChainIntegration:
         """Test that DrasiTool can be invoked using LangChain's invoke method."""
         # Use the standard LangChain tool invocation
         result = await drasi_tool.ainvoke(
-            {"query_name": "test-query", "operation": "read"}
+            {"input": "read:test-query"}
         )
         assert result is not None, "Tool should return result"
 
@@ -80,8 +80,7 @@ class TestLangChainIntegration:
         # LangChain tools should be able to provide their schema
         schema = drasi_tool.args_schema.schema()
         assert "properties" in schema, "Schema must have properties"
-        assert "query_name" in schema["properties"], "Must have query_name field"
-        assert "operation" in schema["properties"], "Must have operation field"
+        assert "input" in schema["properties"], "Must have input field"
 
     @pytest.mark.asyncio
     async def test_tool_error_handling_in_langchain_context(
@@ -93,7 +92,7 @@ class TestLangChainIntegration:
         # Attempting to read non-existent query should raise error
         with pytest.raises(QueryNotFoundError):
             await drasi_tool.ainvoke(
-                {"query_name": "nonexistent-query", "operation": "read"}
+                {"input": "read:nonexistent-query"}
             )
 
     @pytest.mark.asyncio
@@ -101,18 +100,18 @@ class TestLangChainIntegration:
         """Test that tool can perform multiple operations."""
         # Discover queries
         discover_result = await drasi_tool.ainvoke(
-            {"query_name": "", "operation": "discover"}
+            {"input": "discover"}
         )
         assert discover_result is not None
 
         # Read a query
         read_result = await drasi_tool.ainvoke(
-            {"query_name": "test-query", "operation": "read"}
+            {"input": "read:test-query"}
         )
         assert read_result is not None
 
         # Subscribe to a query
         subscribe_result = await drasi_tool.ainvoke(
-            {"query_name": "test-query", "operation": "subscribe"}
+            {"input": "subscribe:test-query"}
         )
         assert subscribe_result is not None

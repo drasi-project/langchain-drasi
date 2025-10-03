@@ -211,25 +211,25 @@ class TestEndToEndWorkflow:
 
         # 1. Agent discovers what queries are available
         result = await tool.ainvoke(
-            {"query_name": "", "operation": "discover"}
+            {"input": "discover"}
         )
         assert result is not None, "Discovery should return results"
 
         # 2. Agent reads specific query
         result = await tool.ainvoke(
-            {"query_name": "test-query", "operation": "read"}
+            {"input": "read:test-query"}
         )
         assert result is not None, "Read should return results"
 
         # 3. Agent subscribes to query for updates
         result = await tool.ainvoke(
-            {"query_name": "test-query", "operation": "subscribe"}
+            {"input": "subscribe:test-query"}
         )
         assert result is not None, "Subscribe should confirm subscription"
 
         # 4. Later, agent unsubscribes
         result = await tool.ainvoke(
-            {"query_name": "test-query", "operation": "unsubscribe"}
+            {"input": "unsubscribe:test-query"}
         )
         assert result is not None, "Unsubscribe should confirm unsubscription"
 

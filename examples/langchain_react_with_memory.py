@@ -1,7 +1,9 @@
-"""Simple interactive ReAct agent with DrasiTool.
+"""Interactive LangGraph ReAct agent with automatic notification memory.
 
-This example demonstrates how to use DrasiTool with LangChain's ReAct agent
-to build an interactive agent that can query and monitor Drasi continuous queries.
+This example demonstrates how to use DrasiTool with LangGraph's ReAct agent
+and automatically integrate notifications into the conversation memory using
+LangGraphMemoryHandler. Notifications are added as system messages directly
+to the checkpoint, so the agent is aware of them without manual injection.
 
 Prerequisites:
     - Set AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT in environment
@@ -15,47 +17,33 @@ IMPORTANT: This example requires a running Drasi MCP server. Without one,
 the agent will not be able to discover or read queries.
 
 Usage:
-    python examples/langchain_react.py
+    python examples/langchain_react_with_memory.py
 """
 
 import asyncio
 import os
-from typing import Any
 from dotenv import load_dotenv
 
-from langchain import hub
-from langchain.agents import AgentExecutor, create_react_agent
+from langgraph.prebuilt import create_react_agent
+from langgraph.checkpoint.memory import MemorySaver
 from langchain_openai import AzureChatOpenAI
 
 # Import Drasi components
 from langchain_drasi import (
     create_drasi_tool,
     MCPConnectionConfig,
-    BaseDrasiNotificationHandler,
+    ConsoleHandler,
+    LangGraphMemoryHandler,
 )
 
 # Load environment variables
 load_dotenv()
 
 
-# Simple notification handler
-class ConsoleHandler(BaseDrasiNotificationHandler):
-    """Handler that prints notifications to console."""
-
-    def on_result_added(self, query_name: str, added_data: dict[str, Any]) -> None:
-        print(f"\n🆕 NOTIFICATION: Added to '{query_name}': {added_data}")
-
-    def on_result_updated(self, query_name: str, updated_data: dict[str, Any]) -> None:
-        print(f"\n🔄 NOTIFICATION: Updated in '{query_name}': {updated_data}")
-
-    def on_result_deleted(self, query_name: str, deleted_data: dict[str, Any]) -> None:
-        print(f"\n🗑️  NOTIFICATION: Deleted from '{query_name}': {deleted_data}")
-
-
 async def main() -> None:
-    """Run the interactive ReAct agent."""
+    """Run the interactive LangGraph ReAct agent with automatic notification memory."""
     print("=" * 70)
-    print("Interactive Drasi Agent (ReAct)")
+    print("Interactive Drasi Agent (LangGraph + Auto Notification Memory)")
     print("=" * 70)
     print("\nType your questions or commands. Type 'exit' or 'quit' to stop.\n")
 
@@ -71,11 +59,20 @@ async def main() -> None:
 
     print(f"Connecting to Drasi server: {server_url}")
 
-    # Create Drasi tool with notification handler
-    notification_handler = ConsoleHandler()
+    # Create LangGraph memory and thread ID
+    memory = MemorySaver()
+    thread_id = "drasi-chat"
+
+    # Create notification handlers:
+    # 1. Console handler to print notifications
+    # 2. LangGraph memory handler to automatically inject notifications
+    console_handler = ConsoleHandler()
+    langgraph_handler = LangGraphMemoryHandler(memory, thread_id)
+
+    # Create Drasi tool with both notification handlers
     drasi_tool = create_drasi_tool(
         mcp_config=mcp_config,
-        notification_handlers=[notification_handler],
+        notification_handlers=[console_handler, langgraph_handler],
     )
 
     # Initialize LLM
@@ -85,22 +82,16 @@ async def main() -> None:
         temperature=0,
     )
 
-    # Pull ReAct prompt from LangChain Hub
-    print("Loading ReAct prompt template...")
-    prompt = hub.pull("hwchase17/react")
-
-    # Create ReAct agent
-    print("Creating ReAct agent...\n")
-    agent = create_react_agent(llm, [drasi_tool], prompt)
-
-    # Create agent executor
-    agent_executor = AgentExecutor(
-        agent=agent,
+    # Create LangGraph ReAct agent with WRAPPED checkpointer
+    print("Creating LangGraph ReAct agent...\n")
+    agent = create_react_agent(
+        model=llm,
         tools=[drasi_tool],
-        verbose=True,
-        handle_parsing_errors=True,
-        max_iterations=10,
+        checkpointer=langgraph_handler.checkpointer,
     )
+
+    # Configuration for conversation thread
+    config: dict = {"configurable": {"thread_id": thread_id}}  # type: ignore[annotation-unchecked]
 
     # Interactive loop
     print("Agent ready! You can ask questions about Drasi queries.\n")
@@ -108,6 +99,8 @@ async def main() -> None:
     print("  - What queries are available?")
     print("  - Read the results from query X")
     print("  - Subscribe to query Y for updates")
+    print("\nNote: Notifications are AUTOMATICALLY added to the conversation memory!")
+    print("      Ask about them anytime (e.g., 'What notifications have I received?')")
     print()
 
     try:
@@ -125,10 +118,19 @@ async def main() -> None:
             if not user_input:
                 continue
 
-            # Run agent
+            # Run agent - notifications are automatically injected
             try:
-                result = await agent_executor.ainvoke({"input": user_input})
-                print(f"\n{result['output']}")
+                result = await agent.ainvoke(
+                    {"messages": [("user", user_input)]},
+                    config=config  # type: ignore[arg-type]
+                )
+
+                # Print the final response
+                if "messages" in result and result["messages"]:
+                    last_message = result["messages"][-1]
+                    if hasattr(last_message, "content"):
+                        print(f"\n{last_message.content}")
+
             except Exception as e:
                 print(f"\n❌ Error: {e}")
 

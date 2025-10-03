@@ -20,7 +20,6 @@ Usage:
 
 import asyncio
 import os
-from typing import Any
 from dotenv import load_dotenv
 
 from langgraph.prebuilt import create_react_agent
@@ -31,70 +30,12 @@ from langchain_openai import AzureChatOpenAI
 from langchain_drasi import (
     create_drasi_tool,
     MCPConnectionConfig,
-    BaseDrasiNotificationHandler,
+    ConsoleHandler,
+    MemoryHandler,
 )
 
 # Load environment variables
 load_dotenv()
-
-
-# Notification handler for real-time updates
-class ConsoleHandler(BaseDrasiNotificationHandler):
-    """Handler that prints notifications to console."""
-
-    def on_result_added(self, query_name: str, added_data: dict[str, Any]) -> None:
-        print(f"\n🆕 NOTIFICATION: Added to '{query_name}': {added_data}")
-
-    def on_result_updated(self, query_name: str, updated_data: dict[str, Any]) -> None:
-        print(f"\n🔄 NOTIFICATION: Updated in '{query_name}': {updated_data}")
-
-    def on_result_deleted(self, query_name: str, deleted_data: dict[str, Any]) -> None:
-        print(f"\n🗑️  NOTIFICATION: Deleted from '{query_name}': {deleted_data}")
-
-
-class MemoryNotificationHandler(BaseDrasiNotificationHandler):
-    """Handler that buffers notifications to be added to the conversation."""
-
-    def __init__(self) -> None:
-        """Initialize handler with empty notification buffer."""
-        self.notifications: list[str] = []
-
-    def get_and_clear_notifications(self) -> list[str]:
-        """Get all buffered notifications and clear the buffer.
-
-        Returns:
-            List of notification messages
-        """
-        notifications = self.notifications.copy()
-        self.notifications.clear()
-        return notifications
-
-    def on_result_added(self, query_name: str, added_data: dict[str, Any]) -> None:
-        """Handle when results are added."""
-        import json
-        message = (
-            f"[System Notification] New result added to query '{query_name}': "
-            f"{json.dumps(added_data, indent=2)}"
-        )
-        self.notifications.append(message)
-
-    def on_result_updated(self, query_name: str, updated_data: dict[str, Any]) -> None:
-        """Handle when results are updated."""
-        import json
-        message = (
-            f"[System Notification] Result updated in query '{query_name}': "
-            f"{json.dumps(updated_data, indent=2)}"
-        )
-        self.notifications.append(message)
-
-    def on_result_deleted(self, query_name: str, deleted_data: dict[str, Any]) -> None:
-        """Handle when results are deleted."""
-        import json
-        message = (
-            f"[System Notification] Result deleted from query '{query_name}': "
-            f"{json.dumps(deleted_data, indent=2)}"
-        )
-        self.notifications.append(message)
 
 
 async def main() -> None:
@@ -124,7 +65,7 @@ async def main() -> None:
     # 1. Console handler to print notifications
     # 2. Memory handler to buffer notifications for the conversation
     console_handler = ConsoleHandler()
-    memory_handler = MemoryNotificationHandler()
+    memory_handler = MemoryHandler()
 
     # Create Drasi tool with both notification handlers
     drasi_tool = create_drasi_tool(
@@ -148,7 +89,7 @@ async def main() -> None:
     )
 
     # Configuration for conversation thread
-    config = {"configurable": {"thread_id": thread_id}}
+    config: dict = {"configurable": {"thread_id": thread_id}}  # type: ignore[annotation-unchecked]
 
     # Interactive loop
     print("Agent ready! You can ask questions about Drasi queries.\n")
@@ -178,12 +119,20 @@ async def main() -> None:
             # Run agent
             try:
                 # Get any buffered notifications and add them to the conversation
-                notifications = memory_handler.get_and_clear_notifications()
+                notification_records = memory_handler.get_all()
                 messages = []
 
                 # Add any pending notifications as system messages
-                for notification in notifications:
-                    messages.append(("system", notification))
+                for record in notification_records:
+                    import json
+                    message = (
+                        f"[System Notification] {record.change_type.capitalize()} in query '{record.query_name}': "
+                        f"{json.dumps(record.data, indent=2) if isinstance(record.data, dict) else str(record.data)}"
+                    )
+                    messages.append(("system", message))
+
+                # Clear the notification buffer
+                memory_handler.clear()
 
                 # Add the user's message
                 messages.append(("user", user_input))
@@ -191,7 +140,7 @@ async def main() -> None:
                 # Invoke the agent with all messages
                 result = await agent.ainvoke(
                     {"messages": messages},
-                    config=config
+                    config=config  # type: ignore[arg-type]
                 )
 
                 # Print the final response

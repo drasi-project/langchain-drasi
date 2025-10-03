@@ -5,6 +5,7 @@ like logging, printing to console, and collecting notifications in memory.
 """
 
 from .console_handler import ConsoleHandler
+from .langgraph_memory_handler import LangGraphMemoryHandler
 from .logging_handler import LoggingHandler
 from .memory_handler import MemoryHandler
 
@@ -12,4 +13,5 @@ __all__ = [
     "ConsoleHandler",
     "LoggingHandler",
     "MemoryHandler",
+    "LangGraphMemoryHandler",
 ]

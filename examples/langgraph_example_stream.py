@@ -20,8 +20,6 @@ Usage:
 
 import asyncio
 import os
-import sys
-import logging
 from typing import Any
 from dotenv import load_dotenv
 
@@ -107,7 +105,7 @@ async def main() -> None:
     )
 
     # Configuration for conversation thread
-    config = {"configurable": {"thread_id": "drasi-chat"}}
+    config: dict = {"configurable": {"thread_id": "drasi-chat"}}  # type: ignore[annotation-unchecked]
 
     # Interactive loop
     print("Agent ready! You can ask questions about Drasi queries.\n")
@@ -135,9 +133,10 @@ async def main() -> None:
             # Run agent with streaming
             try:
                 print()  # Blank line before output
+                event = None
                 async for event in agent.astream(
                     {"messages": [("user", user_input)]},
-                    config=config,
+                    config=config,  # type: ignore[arg-type]
                     stream_mode="values"
                 ):
                     # Get the last message
@@ -150,7 +149,7 @@ async def main() -> None:
                                 pass
 
                 # Print final response
-                if "messages" in event and event["messages"]:
+                if event and "messages" in event and event["messages"]:
                     last_message = event["messages"][-1]
                     if hasattr(last_message, "content"):
                         print(f"{last_message.content}")

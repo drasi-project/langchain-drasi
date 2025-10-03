@@ -60,10 +60,12 @@ class TestDrasiToolContract:
             "DrasiQueryInput must be a Pydantic BaseModel"
 
         # Create instance to verify fields
-        test_input = DrasiQueryInput(query_name="test")
-        assert hasattr(test_input, "query_name"), "Must have query_name field"
-        assert hasattr(test_input, "operation"), "Must have operation field"
-        assert test_input.operation == "read", "Default operation should be 'read'"
+        test_input = DrasiQueryInput(input="discover")
+        assert hasattr(test_input, "input"), "Must have input field"
+
+        # Test with operation:query format
+        test_input2 = DrasiQueryInput(input="read:test-query")
+        assert test_input2.input == "read:test-query"
 
     def test_drasi_tool_init_accepts_config(self) -> None:
         """Test that DrasiTool.__init__ accepts mcp_config."""
