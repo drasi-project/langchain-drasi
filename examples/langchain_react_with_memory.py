@@ -1,9 +1,9 @@
-"""Interactive LangGraph ReAct agent with automatic notification memory.
+"""Interactive ReAct agent with conversation memory and automatic notification injection.
 
-This example demonstrates how to use DrasiTool with LangGraph's ReAct agent
+This example demonstrates how to use DrasiTool with LangChain's ReAct agent
 and automatically integrate notifications into the conversation memory using
-LangGraphMemoryHandler. Notifications are added as system messages directly
-to the checkpoint, so the agent is aware of them without manual injection.
+LangChainMemoryHandler. Notifications are added as system messages directly
+to the conversation history, so the agent is aware of them without manual injection.
 
 Prerequisites:
     - Set AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT in environment
@@ -24,8 +24,9 @@ import asyncio
 import os
 from dotenv import load_dotenv
 
-from langgraph.prebuilt import create_react_agent
-from langgraph.checkpoint.memory import MemorySaver
+from langchain import hub
+from langchain.agents import AgentExecutor, create_react_agent
+from langchain.memory import ConversationBufferMemory
 from langchain_openai import AzureChatOpenAI
 
 # Import Drasi components
@@ -33,7 +34,7 @@ from langchain_drasi import (
     create_drasi_tool,
     MCPConnectionConfig,
     ConsoleHandler,
-    LangGraphMemoryHandler,
+    LangChainMemoryHandler,
 )
 
 # Load environment variables
@@ -41,9 +42,9 @@ load_dotenv()
 
 
 async def main() -> None:
-    """Run the interactive LangGraph ReAct agent with automatic notification memory."""
+    """Run the interactive ReAct agent with automatic notification memory."""
     print("=" * 70)
-    print("Interactive Drasi Agent (LangGraph + Auto Notification Memory)")
+    print("Interactive Drasi Agent (ReAct + Auto Notification Memory)")
     print("=" * 70)
     print("\nType your questions or commands. Type 'exit' or 'quit' to stop.\n")
 
@@ -59,20 +60,23 @@ async def main() -> None:
 
     print(f"Connecting to Drasi server: {server_url}")
 
-    # Create LangGraph memory and thread ID
-    memory = MemorySaver()
-    thread_id = "drasi-chat"
+    # Create conversation memory
+    memory = ConversationBufferMemory(
+        memory_key="chat_history",
+        input_key="input",
+        output_key="output",
+    )
 
     # Create notification handlers:
     # 1. Console handler to print notifications
-    # 2. LangGraph memory handler to automatically inject notifications
+    # 2. LangChain memory handler to automatically inject notifications
     console_handler = ConsoleHandler()
-    langgraph_handler = LangGraphMemoryHandler(memory, thread_id)
+    langchain_handler = LangChainMemoryHandler(memory)
 
     # Create Drasi tool with both notification handlers
     drasi_tool = create_drasi_tool(
         mcp_config=mcp_config,
-        notification_handlers=[console_handler, langgraph_handler],
+        notification_handlers=[console_handler, langchain_handler],
     )
 
     # Initialize LLM
@@ -82,16 +86,23 @@ async def main() -> None:
         temperature=0,
     )
 
-    # Create LangGraph ReAct agent with WRAPPED checkpointer
-    print("Creating LangGraph ReAct agent...\n")
-    agent = create_react_agent(
-        model=llm,
-        tools=[drasi_tool],
-        checkpointer=langgraph_handler.checkpointer,
-    )
+    # Pull ReAct prompt with chat history support
+    print("Loading ReAct prompt template...")
+    prompt = hub.pull("hwchase17/react-chat")
 
-    # Configuration for conversation thread
-    config: dict = {"configurable": {"thread_id": thread_id}}  # type: ignore[annotation-unchecked]
+    # Create ReAct agent
+    print("Creating ReAct agent with memory...\n")
+    agent = create_react_agent(llm, [drasi_tool], prompt)
+
+    # Create agent executor with memory
+    agent_executor = AgentExecutor(
+        agent=agent,
+        tools=[drasi_tool],
+        memory=memory,
+        verbose=True,
+        handle_parsing_errors=True,
+        max_iterations=10,
+    )
 
     # Interactive loop
     print("Agent ready! You can ask questions about Drasi queries.\n")
@@ -120,16 +131,8 @@ async def main() -> None:
 
             # Run agent - notifications are automatically injected
             try:
-                result = await agent.ainvoke(
-                    {"messages": [("user", user_input)]},
-                    config=config  # type: ignore[arg-type]
-                )
-
-                # Print the final response
-                if "messages" in result and result["messages"]:
-                    last_message = result["messages"][-1]
-                    if hasattr(last_message, "content"):
-                        print(f"\n{last_message.content}")
+                result = await agent_executor.ainvoke({"input": user_input})
+                print(f"\n{result['output']}")
 
             except Exception as e:
                 print(f"\n❌ Error: {e}")
