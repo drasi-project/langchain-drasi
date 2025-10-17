@@ -101,7 +101,7 @@ async def main() -> None:
         memory=memory,
         verbose=True,
         handle_parsing_errors=True,
-        max_iterations=10,
+        max_iterations=20,
     )
 
     # Interactive loop

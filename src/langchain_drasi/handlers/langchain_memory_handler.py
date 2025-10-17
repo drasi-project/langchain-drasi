@@ -6,12 +6,10 @@ notifications into the conversation history as system messages.
 
 import json
 from datetime import datetime
-from typing import Any, TYPE_CHECKING
+from typing import Any
 
 from ..callbacks import BaseDrasiNotificationHandler
-
 from langchain_core.memory import BaseMemory
-from langchain_core.messages import SystemMessage
 
 
 
@@ -78,46 +76,49 @@ class LangChainMemoryHandler(BaseDrasiNotificationHandler):
         Args:
             message: System message content
         """
-        self.memory.save_context({"input": ""}, {"output": message})        
+        # Format as if the user is informing the AI about the notification
+        # This creates a natural conversation pattern that LLMs are trained to recall
+        # The acknowledgment explicitly states this is current data to prevent refetching
+        self.memory.save_context(
+            {"input": message},
+            {"output": "I've recorded this notification, and will use it to inform future responses."}
+        )        
 
     def on_result_added(self, query_name: str, added_data: dict[str, Any]) -> None:
         """Handle when results are added."""
         try:
-            data_str = json.dumps(added_data, indent=2, default=str)
+            data_str = json.dumps(added_data, default=str)
         except Exception:
             data_str = str(added_data)
 
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         message = (
-            f"[System Notification - {datetime.now().isoformat()}] "
-            f"New result added to query '{query_name}': "
-            f"{data_str}"
+            f"[Notification at {timestamp}] The '{query_name}' query detected new data: {data_str}"
         )
         self._add_system_message(message)
 
     def on_result_updated(self, query_name: str, updated_data: dict[str, Any]) -> None:
         """Handle when results are updated."""
         try:
-            data_str = json.dumps(updated_data, indent=2, default=str)
+            data_str = json.dumps(updated_data, default=str)
         except Exception:
             data_str = str(updated_data)
 
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         message = (
-            f"[System Notification - {datetime.now().isoformat()}] "
-            f"Result updated in query '{query_name}': "
-            f"{data_str}"
+            f"[Notification at {timestamp}] The '{query_name}' query detected updated data: {data_str}"
         )
         self._add_system_message(message)
 
     def on_result_deleted(self, query_name: str, deleted_data: dict[str, Any]) -> None:
         """Handle when results are deleted."""
         try:
-            data_str = json.dumps(deleted_data, indent=2, default=str)
+            data_str = json.dumps(deleted_data, default=str)
         except Exception:
             data_str = str(deleted_data)
 
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         message = (
-            f"[System Notification - {datetime.now().isoformat()}] "
-            f"Result deleted from query '{query_name}': "
-            f"{data_str}"
+            f"[Notification at {timestamp}] The '{query_name}' query detected deleted data: {data_str}"
         )
         self._add_system_message(message)
