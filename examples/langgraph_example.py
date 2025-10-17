@@ -22,6 +22,7 @@ Usage:
 
 import asyncio
 import os
+from typing import Any
 from dotenv import load_dotenv
 
 from langgraph.prebuilt import create_react_agent
@@ -35,11 +36,23 @@ from langchain_drasi import (
     ConsoleHandler,
     LangGraphMemoryHandler,
 )
+from langchain_drasi.callbacks import BaseDrasiNotificationHandler
 
 # Load environment variables
 load_dotenv()
 
+class MyHandler(BaseDrasiNotificationHandler):
+    def on_result_added(self, query_name: str, added_data: dict[str, Any]) -> None:
+        print(f"\n🆕 NOTIFICATION: Added to '{query_name}': {added_data}")
 
+    def on_result_updated(self, query_name: str, updated_data: dict[str, Any]) -> None:
+        print(f"\n🔄 NOTIFICATION: Updated in '{query_name}': {updated_data}")
+
+    def on_result_deleted(self, query_name: str, deleted_data: dict[str, Any]) -> None:
+        print(f"\n🗑️  NOTIFICATION: Deleted from '{query_name}': {deleted_data}")
+
+
+    
 async def main() -> None:
     """Run the interactive LangGraph ReAct agent with automatic notification memory."""
     print("=" * 70)
@@ -64,15 +77,15 @@ async def main() -> None:
     thread_id = "drasi-chat"
 
     # Create notification handlers:
-    # 1. Console handler to print notifications
+    # 1. MyHandler to print notifications
     # 2. LangGraph memory handler to automatically inject notifications
-    console_handler = ConsoleHandler()
+    my_handler = MyHandler()
     langgraph_handler = LangGraphMemoryHandler(memory, thread_id)
 
     # Create Drasi tool with both notification handlers
     drasi_tool = create_drasi_tool(
         mcp_config=mcp_config,
-        notification_handlers=[console_handler, langgraph_handler],
+        notification_handlers=[my_handler, langgraph_handler],
     )
 
     # Initialize LLM

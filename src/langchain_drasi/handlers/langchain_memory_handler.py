@@ -10,18 +10,9 @@ from typing import Any, TYPE_CHECKING
 
 from ..callbacks import BaseDrasiNotificationHandler
 
-if TYPE_CHECKING:
-    from langchain.memory import ConversationBufferMemory
-    from langchain_core.messages import SystemMessage
+from langchain_core.memory import BaseMemory
+from langchain_core.messages import SystemMessage
 
-try:
-    from langchain.memory import ConversationBufferMemory
-    from langchain_core.messages import SystemMessage
-    LANGCHAIN_AVAILABLE = True
-except ImportError:
-    LANGCHAIN_AVAILABLE = False
-    ConversationBufferMemory = object  # type: ignore[misc,assignment]
-    SystemMessage = object  # type: ignore[misc,assignment]
 
 
 class LangChainMemoryHandler(BaseDrasiNotificationHandler):
@@ -33,7 +24,6 @@ class LangChainMemoryHandler(BaseDrasiNotificationHandler):
 
     Args:
         memory: LangChain ConversationBufferMemory instance
-        max_notifications: Maximum number of notifications to inject at once (default: 100)
 
     Example:
         ```python
@@ -71,27 +61,16 @@ class LangChainMemoryHandler(BaseDrasiNotificationHandler):
 
     def __init__(
         self,
-        memory: "ConversationBufferMemory",  # type: ignore[valid-type]
-        max_notifications: int = 100
+        memory: BaseMemory
     ) -> None:
         """Initialize handler with memory reference.
 
         Args:
             memory: LangChain ConversationBufferMemory instance
-            max_notifications: Maximum number of notifications to track
-
-        Raises:
-            ImportError: If langchain is not installed
         """
-        if not LANGCHAIN_AVAILABLE:
-            raise ImportError(
-                "LangChainMemoryHandler requires langchain to be installed. "
-                "Install with: pip install langchain langchain-core"
-            )
 
         super().__init__()
         self.memory = memory
-        self.max_notifications = max_notifications
 
     def _add_system_message(self, message: str) -> None:
         """Add a system message to the conversation history.
@@ -99,8 +78,7 @@ class LangChainMemoryHandler(BaseDrasiNotificationHandler):
         Args:
             message: System message content
         """
-        system_msg = SystemMessage(content=message)  # type: ignore[call-arg]
-        self.memory.chat_memory.add_message(system_msg)
+        self.memory.save_context({"input": ""}, {"output": message})        
 
     def on_result_added(self, query_name: str, added_data: dict[str, Any]) -> None:
         """Handle when results are added."""

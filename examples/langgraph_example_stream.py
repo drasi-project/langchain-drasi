@@ -142,11 +142,10 @@ async def main() -> None:
                     # Get the last message
                     if "messages" in event and event["messages"]:
                         last_message = event["messages"][-1]
-                        # Only print AI messages
-                        if hasattr(last_message, "type") and last_message.type == "ai":
-                            if hasattr(last_message, "content") and last_message.content:
-                                # Print the response (only once at the end)
-                                pass
+                        
+                        if hasattr(last_message, "content") and last_message.content:
+                            # Print the response (only once at the end)
+                            pass
 
                 # Print final response
                 if event and "messages" in event and event["messages"]:

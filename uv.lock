@@ -503,7 +503,10 @@ name = "langchain-drasi"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "langchain" },
     { name = "langchain-core" },
+    { name = "langchain-openai" },
+    { name = "langgraph" },
     { name = "mcp", extra = ["cli"] },
     { name = "pydantic" },
     { name = "python-dotenv" },
@@ -512,9 +515,6 @@ dependencies = [
 [package.optional-dependencies]
 dev = [
     { name = "black" },
-    { name = "langchain" },
-    { name = "langchain-openai" },
-    { name = "langgraph" },
     { name = "mypy" },
     { name = "pyright" },
     { name = "pytest" },
@@ -527,10 +527,10 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
-    { name = "langchain", marker = "extra == 'dev'", specifier = ">=0.1.0" },
+    { name = "langchain", specifier = ">=0.1.0" },
     { name = "langchain-core", specifier = ">=0.1.0" },
-    { name = "langchain-openai", marker = "extra == 'dev'", specifier = ">=0.1.0" },
-    { name = "langgraph", marker = "extra == 'dev'", specifier = ">=0.1.0" },
+    { name = "langchain-openai", specifier = ">=0.1.0" },
+    { name = "langgraph", specifier = ">=0.1.0" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.0.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.5.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
