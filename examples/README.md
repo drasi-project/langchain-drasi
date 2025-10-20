@@ -6,11 +6,14 @@ This directory contains example applications demonstrating how to use `langchain
 
 1. **Install dependencies:**
    ```bash
-   pip install langchain-drasi python-dotenv langchain-openai
+   # Install the library with example dependencies
+   pip install langchain-drasi[examples]
 
-   # For LangGraph example
-   pip install langgraph
+   # Or if you already have the library installed
+   pip install langchain langchain-openai python-dotenv
    ```
+
+   **Note:** The core `langchain-drasi` library only requires `langchain-core` and `langgraph`. The full `langchain`, `langchain-openai`, and `python-dotenv` packages are only needed for these examples.
 
 2. **Set up environment variables:**
    Create a `.env` file in the project root:
@@ -181,9 +184,9 @@ config = MCPConnectionConfig(
 - Ensure the model name is correct
 
 **Import errors:**
-- Make sure all dependencies are installed
-- For LangGraph example, install `langgraph`
-- Install the library: `pip install -e .` from project root
+- Make sure all dependencies are installed: `pip install langchain-drasi[examples]`
+- For development, install from project root: `pip install -e .[examples]`
+- The core library only requires `langchain-core` and `langgraph`; example-specific dependencies (`langchain`, `langchain-openai`, `python-dotenv`) are optional
 
 ## Next Steps
 
