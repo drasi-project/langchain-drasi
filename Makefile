@@ -35,19 +35,19 @@ build: clean
 	uv build
 
 test:
-	uv run pytest tests/ -v
+	uv run python -m pytest tests/ -v
 
 test-fast:
-	uv run pytest tests/ -v -m "not integration"
+	uv run python -m pytest tests/ -v -m "not integration"
 
 test-unit:
-	uv run pytest tests/unit/ -v
+	uv run python -m pytest tests/unit/ -v
 
 test-integration:
-	uv run pytest tests/integration/ -v
+	uv run python -m pytest tests/integration/ -v
 
 test-contract:
-	uv run pytest tests/contract/ -v
+	uv run python -m pytest tests/contract/ -v
 
 lint:
 	uv run ruff check src/ tests/ examples/
