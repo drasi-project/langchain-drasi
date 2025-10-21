@@ -73,14 +73,12 @@ clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
 
-example-simple:
-	uv run python examples/simple_example.py
 
 example-langchain:
-	uv run python examples/vanilla_langchain.py
+	uv run python examples/langchain_react.py
 
-example-react:
-	uv run python examples/langgraph_example.py
+example-langgraph:
+	uv run python examples/langgraph_react.py
 
 publish-test: build
 	uv publish --publish-url https://test.pypi.org/legacy/ dist/*

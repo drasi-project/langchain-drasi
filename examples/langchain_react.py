@@ -17,7 +17,7 @@ IMPORTANT: This example requires a running Drasi MCP server. Without one,
 the agent will not be able to discover or read queries.
 
 Usage:
-    python examples/langchain_react_with_memory.py
+    python examples/langchain_react.py
 """
 
 import asyncio

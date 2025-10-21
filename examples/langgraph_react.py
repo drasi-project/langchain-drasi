@@ -17,7 +17,7 @@ IMPORTANT: This example requires a running Drasi MCP server. Without one,
 the agent will not be able to discover or read queries.
 
 Usage:
-    python examples/langgraph_example.py
+    python examples/langgraph_react.py
 """
 
 import asyncio
