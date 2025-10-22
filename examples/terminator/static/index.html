@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terminator Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background-color: #1a1a1a;
+            color: #00ff00;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+            text-shadow: 0 0 10px #00ff00;
+        }
+
+        #login-screen {
+            background-color: #2a2a2a;
+            padding: 30px;
+            border-radius: 10px;
+            border: 2px solid #00ff00;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+        }
+
+        #login-screen h2 {
+            margin-bottom: 20px;
+            color: #00ff00;
+        }
+
+        #login-screen input {
+            padding: 10px;
+            width: 300px;
+            margin-bottom: 15px;
+            background-color: #1a1a1a;
+            border: 1px solid #00ff00;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+        }
+
+        #login-screen button {
+            padding: 10px 30px;
+            background-color: #00ff00;
+            color: #1a1a1a;
+            border: none;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        #login-screen button:hover {
+            background-color: #00cc00;
+        }
+
+        #game-screen {
+            display: none;
+        }
+
+        #game-info {
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        #game-canvas {
+            border: 3px solid #00ff00;
+            box-shadow: 0 0 30px rgba(0, 255, 0, 0.5);
+            background-color: #0a0a0a;
+        }
+
+        #instructions {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .error {
+            color: #ff0000;
+            margin-top: 10px;
+            text-shadow: 0 0 10px #ff0000;
+        }
+
+        .status {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+
+        .terminated {
+            color: #ff0000;
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 0 0 20px #ff0000;
+        }
+    </style>
+</head>
+<body>
+    <h1>TERMINATOR GAME</h1>
+
+    <div id="login-screen">
+        <h2>Enter Your Name</h2>
+        <input type="text" id="player-name" placeholder="Player Name (max 20 chars)" maxlength="20" />
+        <br>
+        <button onclick="joinGame()">Join Game</button>
+        <div id="error-message" class="error"></div>
+    </div>
+
+    <div id="game-screen">
+        <div id="game-info">
+            <div class="status">Player: <span id="current-player"></span></div>
+            <div class="status">Position: (<span id="player-x">0</span>, <span id="player-y">0</span>)</div>
+        </div>
+        <canvas id="game-canvas"></canvas>
+        <div id="instructions">
+            <p>Use ARROW KEYS to move</p>
+            <p><span style="color: #00ff00;">GREEN</span> = You |
+               <span style="color: #00aaff;">BLUE</span> = Other Players |
+               <span style="color: #ff0000;">RED</span> = Terminators</p>
+            <p>Avoid the terminators or you'll be TERMINATED!</p>
+        </div>
+        <div id="terminated-message" class="terminated" style="display: none; margin-top: 20px;">
+            YOU HAVE BEEN TERMINATED!
+        </div>
+    </div>
+
+    <script>
+        // Constants
+        const CELL_SIZE = 20;
+
+        // Game state
+        let currentPlayer = null;
+        let players = new Map();
+        let ws = null;
+        let mapData = null;
+
+        // Canvas setup
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Fetch map data on page load
+        async function loadMapData() {
+            try {
+                const response = await fetch('/api/map');
+                mapData = await response.json();
+                // Update canvas size based on map dimensions
+                canvas.width = mapData.width * CELL_SIZE;
+                canvas.height = mapData.height * CELL_SIZE;
+            } catch (error) {
+                console.error('Failed to load map data:', error);
+            }
+        }
+
+        // Load map data immediately
+        loadMapData();
+
+        async function joinGame() {
+            if (!mapData) {
+                document.getElementById('error-message').textContent = 'Map data not loaded yet, please wait...';
+                return;
+            }
+            const playerName = document.getElementById('player-name').value.trim();
+            const errorDiv = document.getElementById('error-message');
+
+            if (!playerName) {
+                errorDiv.textContent = 'Please enter a name';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/players', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: playerName })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    errorDiv.textContent = error.detail || 'Failed to join game';
+                    return;
+                }
+
+                const player = await response.json();
+                currentPlayer = player;
+
+                document.getElementById('login-screen').style.display = 'none';
+                document.getElementById('game-screen').style.display = 'block';
+                document.getElementById('current-player').textContent = player.id;
+
+                connectWebSocket();
+                setupKeyboardControls();
+                startGameLoop();
+
+            } catch (error) {
+                errorDiv.textContent = 'Connection error: ' + error.message;
+            }
+        }
+
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
+            ws.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+
+                if (message.type === 'initial_state' || message.type === 'state_update') {
+                    // Full state update - refresh all players
+                    players.clear();
+                    let foundSelf = false;
+                    message.players.forEach(p => {
+                        players.set(p.id, p);
+
+                        // Update our position if it's us
+                        if (currentPlayer && p.id === currentPlayer.id) {
+                            currentPlayer.x = p.x;
+                            currentPlayer.y = p.y;
+                            updatePositionDisplay();
+                            foundSelf = true;
+                        }
+                    });
+
+                    // If we're not in the state update, we've been terminated
+                    if (currentPlayer && !foundSelf && message.type === 'state_update') {
+                        showTerminated();
+                    }
+                } else if (message.type === 'player_joined') {
+                    players.set(message.player.id, message.player);
+                } else if (message.type === 'player_moved') {
+                    players.set(message.player.id, message.player);
+
+                    // Update our position if it's us
+                    if (message.player.id === currentPlayer.id) {
+                        currentPlayer.x = message.player.x;
+                        currentPlayer.y = message.player.y;
+                        updatePositionDisplay();
+                    }
+                } else if (message.type === 'player_left') {
+                    players.delete(message.player_id);
+
+                    // Check if we were terminated
+                    if (message.player_id === currentPlayer.id) {
+                        showTerminated();
+                    }
+                }
+
+                render();
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+        }
+
+        function setupKeyboardControls() {
+            document.addEventListener('keydown', async (event) => {
+                if (document.getElementById('terminated-message').style.display !== 'none') {
+                    return; // Can't move if terminated
+                }
+
+                let direction = null;
+                switch(event.key) {
+                    case 'ArrowUp': direction = 'up'; break;
+                    case 'ArrowDown': direction = 'down'; break;
+                    case 'ArrowLeft': direction = 'left'; break;
+                    case 'ArrowRight': direction = 'right'; break;
+                    default: return;
+                }
+
+                event.preventDefault();
+
+                try {
+                    const response = await fetch(`/api/players/${currentPlayer.id}/move`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ direction })
+                    });
+
+                    if (!response.ok) {
+                        console.error('Move failed');
+                    }
+                } catch (error) {
+                    console.error('Move error:', error);
+                    // Check if player was deleted (terminated)
+                    checkIfTerminated();
+                }
+            });
+        }
+
+        async function checkIfTerminated() {
+            try {
+                const response = await fetch(`/api/players/${currentPlayer.id}`);
+                if (response.status === 404) {
+                    showTerminated();
+                }
+            } catch (error) {
+                console.error('Error checking player status:', error);
+            }
+        }
+
+        function showTerminated() {
+            document.getElementById('terminated-message').style.display = 'block';
+        }
+
+        function updatePositionDisplay() {
+            document.getElementById('player-x').textContent = currentPlayer.x;
+            document.getElementById('player-y').textContent = currentPlayer.y;
+        }
+
+        function render() {
+            if (!mapData) return;
+
+            // Clear canvas
+            ctx.fillStyle = '#0a0a0a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw walls
+            ctx.fillStyle = '#444444';
+            mapData.walls.forEach(([x1, y1, x2, y2]) => {
+                if (x1 === x2) {
+                    // Vertical wall
+                    for (let y = Math.min(y1, y2); y <= Math.max(y1, y2); y++) {
+                        ctx.fillRect(x1 * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                    }
+                } else {
+                    // Horizontal wall
+                    for (let x = Math.min(x1, x2); x <= Math.max(x1, x2); x++) {
+                        ctx.fillRect(x * CELL_SIZE, y1 * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                    }
+                }
+            });
+
+            // Draw players
+            players.forEach(player => {
+                let color;
+                if (player.id === currentPlayer.id) {
+                    color = '#00ff00'; // Green for self
+                } else if (player.id.startsWith('T-')) {
+                    color = '#ff0000'; // Red for terminators
+                } else {
+                    color = '#00aaff'; // Blue for other players
+                }
+
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.arc(
+                    player.x * CELL_SIZE + CELL_SIZE / 2,
+                    player.y * CELL_SIZE + CELL_SIZE / 2,
+                    CELL_SIZE / 2 - 2,
+                    0,
+                    Math.PI * 2
+                );
+                ctx.fill();
+
+                // Add glow effect
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = color;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            });
+        }
+
+        function startGameLoop() {
+            setInterval(render, 100);
+        }
+
+        // Allow enter key to join
+        document.getElementById('player-name').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                joinGame();
+            }
+        });
+    </script>
+</body>
+</html>

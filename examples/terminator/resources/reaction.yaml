@@ -1,0 +1,16 @@
+kind: Reaction
+apiVersion: v1
+name: test-mcp
+spec:
+  kind: MCP
+  queries:
+    idle-players: |
+      description: "Position alert for players who have been idle for more than 5 seconds"
+      added:
+        template: |
+          {
+            "player": "{{after.id}}",
+            "x": "{{after.x}}",
+            "y": "{{after.y}}",
+            "description": "Player {{after.id}} was idle at position ({{after.x}}, {{after.y}})"
+          }
