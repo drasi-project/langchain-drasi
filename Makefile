@@ -15,9 +15,6 @@ help:
 	@echo "  typecheck        - Run type checking (pyright)"
 	@echo "  format           - Format code"
 	@echo "  clean            - Remove build artifacts"
-	@echo "  example-simple   - Run simple example"
-	@echo "  example-langchain - Run vanilla LangChain example"
-	@echo "  example-react    - Run interactive ReAct agent example"
 	@echo "  publish-test     - Publish to TestPyPI"
 	@echo "  publish          - Publish to PyPI"
 
@@ -72,12 +69,6 @@ clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
 
-
-example-langchain:
-	uv run python examples/langchain_react.py
-
-example-langgraph:
-	uv run python examples/langgraph_react.py
 
 publish-test: build
 	uv publish --publish-url https://test.pypi.org/legacy/ dist/*

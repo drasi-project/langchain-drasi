@@ -53,6 +53,10 @@ make langchain
 
 # OR run the LangGraph ReAct sample
 make langgraph
+
+# 7. Update freezers in the database
+psql -h localhost -p 5432 -U postgres -d demo -f resources/update-2.sql
+psql -h localhost -p 5432 -U postgres -d demo -f resources/update-3.sql
 ```
 
 See [Database and Drasi Setup](#database-and-drasi-setup) below for detailed setup instructions.
@@ -220,11 +224,8 @@ while True:
 
 Example interaction:
 ```
-> What queries are available?
-[Agent discovers and lists available Drasi queries including 'freezers-overheat']
-
-> Subscribe to the freezers-overheat query
-[Agent subscribes to the query]
+> Track freezers above 32?
+[Agent discovers and and subscribes to the 'freezers-overheat' query]
 
 🆕 NOTIFICATION: Added to 'freezers-overheat': {'freezerId': '2', 'temperature': '35', ...}
 
@@ -284,7 +285,7 @@ spec:
     host: host.docker.internal  # For Docker Desktop on Mac/Windows
     port: 5432
     user: postgres
-    password: test
+    password: test  # Update with your password
     database: demo
     ssl: true
     tables:
