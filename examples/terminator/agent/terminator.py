@@ -136,6 +136,12 @@ class TerminatorAgent:
             print(f"[{self.agent_id}] ⚠ Error in hunting workflow: {e}")
 
     async def shutdown(self) -> None:
-        """Clean up the terminator."""
+        try:
+            response = await self.http_client.delete(f"/api/players/{self.agent_id}")
+            response.raise_for_status()
+            print(f"[{self.agent_id}] Removed from game")
+        except Exception as e:
+            print(f"[{self.agent_id}] Failed to remove from game: {e}")
+
         await self.http_client.aclose()
         print(f"[{self.agent_id}] Shutdown")

@@ -36,20 +36,3 @@ spec:
       p.x,
       p.y
 
----
-apiVersion: v1
-kind: ContinuousQuery
-name: all-positions
-spec:
-  mode: query
-  sources:
-    subscriptions:
-      - id: game
-  query: >
-    MATCH
-      (p:player)
-    RETURN
-      p.id,
-      p.x,
-      p.y,
-      p.type
