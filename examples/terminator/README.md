@@ -128,8 +128,7 @@ The terminator uses a LangGraph state machine that demonstrates how to integrate
 
 ```mermaid
 stateDiagram-v2
-    [*] --> setup_queries_prompt: not initialized
-    [*] --> check_sensors: initialized
+    [*] --> setup_queries_prompt
 
     setup_queries_prompt --> setup_queries_call_model
     setup_queries_call_model --> setup_queries_tools: has tool calls
@@ -240,14 +239,6 @@ This example demonstrates a **reactive agent pattern** where:
 
 This is more efficient than traditional polling approaches and enables truly reactive AI agents.
 
-### Why Custom Workflow vs create_react_agent?
-
-This example uses a custom LangGraph workflow instead of `create_react_agent` because:
-
-- **More control** - Custom nodes for setup, sensor checking, and execution
-- **Stateful behavior** - Maintains path, target, and sensor log across iterations
-- **Efficient tool use** - Only calls LLM when needed (setup and target evaluation)
-- **Demonstrates LangGraph patterns** - Shows how to build complex agent workflows
 
 ## Environment Variables
 
