@@ -1,358 +1,289 @@
-# Terminator Game
+# Terminator Game - langchain-drasi Example
 
-An interactive multiplayer game demonstrating the power of LangGraph agents with Drasi continuous queries.
+A LangGraph agent that uses **langchain-drasi** to hunt players in real-time using Drasi continuous queries.
 
-## Quick Start
-
-```bash
-# 1. Install uv if you haven't already
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# 2. Navigate to the terminator directory
-cd examples/terminator
-
-# 3. Set up environment and install dependencies
-cp .env.example .env
-# Edit .env with your configuration
-uv sync
-
-# 4. Initialize database
-psql -d game -f init_db.sql
-
-# 5. Configure Drasi (see Setup section)
-
-# 6. Run backend (terminal 1)
-make backend
-
-# 7. Run agents (terminal 2)
-make terminator
-
-# 8. Play at http://localhost:8000
-```
+This example demonstrates how to build reactive AI agents that respond to real-time database changes through Drasi's continuous query system.
 
 ## Overview
 
-Terminator is a real-time multiplayer game where:
-- Players join via a web portal and navigate a 32x64 grid maze
-- Three AI-powered terminators (LangGraph agents) hunt down players
-- Terminators use **Drasi continuous queries** to discover and track player movements in real-time
-- Players must avoid terminators or be eliminated from the game
-
 This example showcases:
-- **LangGraph agents** for autonomous AI behavior
-- **langchain-drasi** integration for real-time query subscriptions
-- **FastAPI** backend with WebSocket support
-- **PostgreSQL** for game state persistence
-- Real-time multiplayer gameplay
-
-## Architecture
-
-```
-┌─────────────────┐
-│   Web Browser   │ ← Players connect and play
-└────────┬────────┘
-         │ HTTP/WebSocket
-         ▼
-┌─────────────────┐
-│  FastAPI Server │ ← Game backend + WebSocket hub
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│   PostgreSQL    │ ← Player positions (source for Drasi)
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│   Drasi MCP     │ ← Continuous queries on player table
-└────────┬────────┘
-         │ Query subscriptions
-         ▼
-┌─────────────────┐
-│  3 Terminator   │ ← LangGraph agents hunting players
-│     Agents      │
-└─────────────────┘
-```
+- **Custom LangGraph workflow** that integrates with the Drasi tool
+- **SensorHandler** - Custom notification handler for Drasi query results
+- **Real-time reactive behavior** - Agent responds immediately to database changes
+- **Query discovery and subscription** - Agent uses LLM to discover and subscribe to relevant queries
 
 ## Prerequisites
 
 1. **Python 3.11+**
 2. **[uv](https://docs.astral.sh/uv/)** - Fast Python package manager
-3. **PostgreSQL** database
-4. **Drasi MCP server** configured with:
-   - PostgreSQL source pointing to the game database
-   - Continuous queries for player tracking
-5. **Azure OpenAI** API access (for the LLM powering agents)
+3. **PostgreSQL** database with game schema (see `init_db.sql`)
+4. **Drasi MCP server** configured with PostgreSQL source
+5. **Azure OpenAI** API access
 
-### Installing uv
+## Quick Start
 
 ```bash
-# On macOS and Linux
-curl -LsSf https://astral.sh/uv/install.sh | sh
+# 1. Install dependencies
+cd examples/terminator
+uv sync
 
-# On Windows
-powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
-```
+# 2. Configure environment
+cp .env.example .env
+# Edit .env with your Drasi server URL, database, and Azure OpenAI credentials
 
-Learn more at: https://docs.astral.sh/uv/
-
-## Setup
-
-### 1. Database Setup
-
-Create a PostgreSQL database for the game:
-
-```bash
-createdb game
-```
-
-Initialize the database schema:
-
-```bash
+# 3. Initialize database
 psql -d game -f init_db.sql
-```
 
-### 2. Drasi Configuration
-
-Ensure your Drasi MCP server is running and configured with the resources in the `resources/` folder:
-
-- `sources.yaml` - PostgreSQL source configuration
-- `queries.yaml` - Continuous query for idle players
-
-Apply the Drasi resources:
-
-```bash
+# 4. Configure Drasi resources
 drasi apply -f resources/sources.yaml
 drasi apply -f resources/queries.yaml
+
+# 5. Run backend (terminal 1)
+make backend
+
+# 6. Run terminator agent (terminal 2)
+make terminator
 ```
 
-### 3. Environment Variables
+## How It Works
 
-Create a `.env` file in this directory:
+### langchain-drasi Integration
+
+The terminator agent demonstrates the core langchain-drasi integration pattern:
+
+#### 1. Create a Custom Notification Handler
+
+The `SensorHandler` extends `BaseDrasiNotificationHandler` to receive real-time query results:
+
+```python
+from langchain_drasi.callbacks import BaseDrasiNotificationHandler
+
+class SensorHandler(BaseDrasiNotificationHandler):
+    def __init__(self, agent_id: str):
+        self.agent_id = agent_id
+        self.notification_queue = Queue()
+
+    def on_result_added(self, query_name: str, added_data: dict[str, Any]) -> None:
+        """Called when Drasi detects a new result in a subscribed query."""
+        notification = {
+            "type": "added",
+            "query": query_name,
+            "data": added_data,
+            "timestamp": time.time()
+        }
+        self.notification_queue.put(notification)
+
+    def on_result_updated(self, query_name: str, updated_data: dict[str, Any]) -> None:
+        """Called when a result changes."""
+        # Handle updates...
+
+    def on_result_deleted(self, query_name: str, deleted_data: dict[str, Any]) -> None:
+        """Called when a result is removed."""
+        # Handle deletions...
+```
+
+#### 2. Configure Drasi Connection
+
+```python
+from langchain_drasi import create_drasi_tool, MCPConnectionConfig
+
+# Configure connection to Drasi MCP server
+mcp_config = MCPConnectionConfig(
+    server_url="http://localhost:8083",
+    headers={"Authorization": f"Bearer {token}"} if token else None,
+    timeout=30.0,
+)
+
+# Create the Drasi tool with your notification handler
+drasi_tool = create_drasi_tool(
+    mcp_config=mcp_config,
+    notification_handlers=[sensor_handler],
+)
+```
+
+#### 3. Build LangGraph Workflow with Drasi Tool
+
+The agent uses a custom LangGraph workflow that integrates the Drasi tool:
+
+```python
+from langgraph.graph import StateGraph
+from langgraph.prebuilt import ToolNode
+
+workflow = StateGraph(HuntingState)
+
+# Add nodes
+workflow.add_node("setup_queries_call_model", call_model_node)
+workflow.add_node("setup_queries_tools", ToolNode([drasi_tool]))
+workflow.add_node("check_sensors", check_sensors_node)
+# ... more nodes
+
+# Compile and run
+hunting_workflow = workflow.compile()
+await hunting_workflow.ainvoke(initial_state)
+```
+
+### Agent Workflow State Machine
+
+The terminator uses a LangGraph state machine that demonstrates how to integrate Drasi into an agentic workflow:
+
+```mermaid
+stateDiagram-v2
+    [*] --> setup_queries_prompt: not initialized
+    [*] --> check_sensors: initialized
+
+    setup_queries_prompt --> setup_queries_call_model
+    setup_queries_call_model --> setup_queries_tools: has tool calls
+    setup_queries_call_model --> check_sensors: setup complete
+    setup_queries_tools --> setup_queries_call_model: loop
+
+    check_sensors --> evaluate_targets: reevaluate plan
+    check_sensors --> select_and_plan: has targets
+    check_sensors --> execute_move: has path or no targets
+
+    evaluate_targets --> select_and_plan
+    select_and_plan --> execute_move
+    execute_move --> check_sensors: loop
+```
+
+**Workflow Phases:**
+
+1. **Setup Phase (First Run Only)**
+   - **setup_queries_prompt** - Prompts the LLM to discover available Drasi queries
+   - **setup_queries_call_model** - LLM calls the drasi_tool with `discover` operation
+   - **setup_queries_tools** - Executes the Drasi tool calls to subscribe to relevant queries
+   - This phase loops until the LLM has discovered and subscribed to all relevant queries
+
+2. **Main Hunting Loop (Continuous)**
+   - **check_sensors** - Checks `SensorHandler` for new Drasi notifications
+   - **evaluate_targets** - Uses LLM to parse sensor data and extract target positions
+   - **select_and_plan** - Selects closest target and plans path (code-based, no LLM)
+   - **execute_move** - Executes the next move via game API
+   - Loop continues indefinitely, reacting to new notifications
+
+### Key Integration Points
+
+#### Using the Drasi Tool in the Workflow
+
+The agent uses the drasi_tool during setup to discover and subscribe to queries:
+
+```python
+async def call_model_node(state: HuntingState) -> HuntingState:
+    """Call LLM with Drasi tool access."""
+    response = await llm.bind_tools([drasi_tool]).ainvoke(state["messages"])
+    return {"messages": [response]}
+```
+
+The LLM receives this prompt:
+```
+You have access to the drasi_query tool. Use it to:
+1. Discover what queries are available (operation="discover")
+2. Subscribe to all queries that track player positions (operation="subscribe" with query_name)
+```
+
+The LLM then makes tool calls like:
+- `drasi_query(operation="discover")` - Returns list of available queries
+- `drasi_query(operation="subscribe", query_name="all_players")` - Subscribes to a query
+
+#### Checking Sensors for Notifications
+
+The workflow continuously checks the `SensorHandler` for new notifications:
+
+```python
+async def check_sensors(state: HuntingState) -> HuntingState:
+    """Check for new Drasi notifications."""
+    await asyncio.sleep(0.5)  # Brief wait
+
+    if sensor_handler.has_new_notifications():
+        new_notifications = sensor_handler.get_new_notifications()
+        # Add to sensor log and trigger re-evaluation
+        return {
+            "reevaluate_plan": True,
+            "sensor_log": [*state["sensor_log"], *new_notifications]
+        }
+
+    return state
+```
+
+When new notifications arrive, the workflow triggers the `evaluate_targets` node where the LLM parses the sensor data to extract player positions.
+
+### File Structure
+
+```
+examples/terminator/
+├── agent/
+│   ├── terminator.py      # Main TerminatorAgent class with Drasi integration
+│   ├── workflow.py        # LangGraph workflow state machine
+│   ├── sensor.py          # SensorHandler notification handler
+│   └── pathfinding.py     # BFS pathfinding utilities
+├── terminator.py          # Entry point
+├── backend.py             # Game backend (FastAPI + PostgreSQL)
+└── resources/
+    ├── sources.yaml       # Drasi PostgreSQL source config
+    └── queries.yaml       # Drasi continuous query definitions
+```
+
+**Focus on these files for langchain-drasi integration:**
+- **`agent/terminator.py`** - Shows how to create and configure the Drasi tool
+- **`agent/sensor.py`** - Custom `BaseDrasiNotificationHandler` implementation
+- **`agent/workflow.py`** - LangGraph workflow that uses the Drasi tool and checks sensors
+
+## Key Concepts
+
+### Reactive Agent Pattern
+
+This example demonstrates a **reactive agent pattern** where:
+
+1. **Agent subscribes to queries** - Uses LLM + drasi_tool to discover and subscribe
+2. **Drasi pushes notifications** - When database changes match query conditions
+3. **Agent reacts immediately** - SensorHandler receives notifications, workflow re-evaluates
+4. **No polling required** - Agent is notified of changes in real-time
+
+This is more efficient than traditional polling approaches and enables truly reactive AI agents.
+
+### Why Custom Workflow vs create_react_agent?
+
+This example uses a custom LangGraph workflow instead of `create_react_agent` because:
+
+- **More control** - Custom nodes for setup, sensor checking, and execution
+- **Stateful behavior** - Maintains path, target, and sensor log across iterations
+- **Efficient tool use** - Only calls LLM when needed (setup and target evaluation)
+- **Demonstrates LangGraph patterns** - Shows how to build complex agent workflows
+
+## Environment Variables
 
 ```env
-# Database Configuration
+# Drasi MCP Server
+DRASI_SERVER_URL=http://localhost:8083
+DRASI_API_TOKEN=your_token_if_required
+
+# Game Backend API
+API_BASE_URL=http://localhost:8000
+
+# Azure OpenAI
+AZURE_OPENAI_API_KEY=your_api_key
+AZURE_OPENAI_ENDPOINT=https://your-endpoint.openai.azure.com/
+AZURE_OPENAI_DEPLOYMENT=gpt-4o-mini
+AZURE_OPENAI_API_VERSION=2024-02-15-preview
+
+# Database (used by backend)
 DB_HOST=localhost
 DB_PORT=5432
 DB_USER=postgres
 DB_PASSWORD=your_password
 DB_NAME=game
-
-# Drasi MCP Server
-DRASI_SERVER_URL=http://localhost:8083
-DRASI_API_TOKEN=your_token_if_required
-
-# Azure OpenAI Configuration
-AZURE_OPENAI_API_KEY=your_api_key
-AZURE_OPENAI_ENDPOINT=https://your-endpoint.openai.azure.com/
-AZURE_OPENAI_DEPLOYMENT=gpt-4o-mini
-AZURE_OPENAI_API_VERSION=2024-02-15-preview
 ```
-
-### 4. Install Dependencies
-
-```bash
-cd examples/terminator
-
-# Sync all dependencies (creates venv and installs everything)
-uv sync
-```
-
-This will:
-- Create a virtual environment
-- Install all dependencies from `pyproject.toml`
-- Install `langchain-drasi` from the parent directory (editable)
-- Lock dependencies in `uv.lock`
-
-## Running the Game
-
-You need to run two processes: the backend server and the terminator agents.
-
-### Option 1: Using Makefile (easiest)
-
-**Terminal 1 - Backend Server:**
-```bash
-cd examples/terminator
-make backend
-```
-
-**Terminal 2 - Terminator Agents:**
-```bash
-cd examples/terminator
-make terminator
-```
-
-### Option 2: Using uv directly
-
-**Terminal 1 - Backend Server:**
-```bash
-cd examples/terminator
-uv run python backend.py
-```
-
-**Terminal 2 - Terminator Agents:**
-```bash
-cd examples/terminator
-uv run python terminator.py
-```
-
-> **Note:** `uv run` automatically uses the virtual environment created by `uv sync`
-
-## How to Play
-
-1. **Open your browser** to `http://localhost:8000`
-2. **Enter your player name** (max 20 characters)
-3. **Use arrow keys** to move around the maze:
-   - `↑` - Move up
-   - `↓` - Move down
-   - `←` - Move left
-   - `→` - Move right
-4. **Avoid the red terminators!**
-   - Green marker = You
-   - Blue markers = Other players
-   - Red markers = Terminators
-5. **Survive as long as possible!**
-
-## How It Works
-
-### Terminators (LangGraph Agents)
-
-Each terminator is an autonomous LangGraph agent that:
-
-1. **Discovers queries** - On startup, the agent asks the Drasi tool what queries are available
-2. **Subscribes to updates** - The agent subscribes to queries that provide player position data
-3. **Stores notifications** - When players move, Drasi sends notifications that are stored in the agent's memory
-4. **Hunts players** - The terminator uses its memory to track the closest player and move toward them
-5. **Eliminates on contact** - When a terminator reaches a player's position, the player is removed from the database
-
-### Key Components
-
-- **`game_map.py`** - Map definition with walls and collision detection
-- **`backend.py`** - FastAPI server with player CRUD and WebSocket support
-- **`agent/`** - Modular agent implementation with Drasi integration
-  - **`agent/terminator.py`** - Main TerminatorAgent class
-  - **`agent/workflow.py`** - LangGraph workflow and hunting logic
-  - **`agent/sensor.py`** - Drasi notification handler
-  - **`agent/pathfinding.py`** - BFS pathfinding utilities
-- **`terminator.py`** - Entry point that spawns a terminator agent
-- **`static/index.html`** - Web UI for players
-
-### Real-Time Synchronization
-
-The backend uses an **event-driven webhook system** to keep all clients synchronized:
-
-- External services (like Drasi) send HTTP requests to `/changes/{player_id}` webhooks when positions change
-- Backend broadcasts position updates to all connected WebSocket clients
-- Frontend updates all player positions in real-time, including terminators (rendered as red markers)
-- DELETE requests to `/changes/{player_id}` notify clients when players are eliminated
-
-This event-driven architecture eliminates the need for database polling and ensures low-latency updates.
-
-### Drasi Integration
-
-The terminators use `langchain-drasi` to:
-- Call `discover` to find available queries
-- Call `subscribe` to start receiving real-time updates
-- Receive notifications via `LangGraphMemoryHandler` (injected into conversation memory)
-- Receive notifications via custom `TerminatorMemory` handler (for decision-making)
-
-Example agent initialization:
-
-```python
-# Create Drasi tool with notification handlers
-drasi_tool = create_drasi_tool(
-    mcp_config=mcp_config,
-    notification_handlers=[memory_handler, langgraph_handler],
-)
-
-# Create LangGraph agent with the tool
-agent = create_react_agent(
-    model=llm,
-    tools=[drasi_tool],
-    checkpointer=langgraph_handler.checkpointer,
-)
-```
-
-## Game Map
-
-The game uses a 32 (height) x 64 (width) grid with walls:
-
-```
------------------------------------------------------------------
-|            |               |                    |             |
-|                            |                                  |
-|            |               |                    |             |
-|------------|----  ---------|--------  ----------|-------------|
-|            |               |                    |             |
-|            |                                    |             |
-|            |               |                                  |
-|            |               |                    |             |
-|--------  --|----  ---------|-----------------  -|-----  ------|
-|                                                               |
-|                                                               |
-|                                                               |
-|                                                               |
-|---------------------------------------------------------------|
-```
-
-Players and terminators spawn at random valid positions and cannot walk through walls.
-
-## Customization
-
-### Adjust Terminator Behavior
-
-In `agent/workflow.py`, you can modify:
-- **Move speed** - Change the `await asyncio.sleep()` values in the workflow nodes
-- **AI temperature** - Adjust the LLM temperature in `terminator.py` for more/less random behavior
-- **Number of terminators** - Run `make terminator` multiple times in separate terminals to spawn more agents
-
-### Modify the Map
-
-Edit the `WALLS` list in `game_map.py` to create your own maze layout.
-
-### Add New Queries
-
-Create additional continuous queries in `resources/queries.yaml` to give terminators more information (e.g., player velocity, clustering, etc.)
 
 ## Troubleshooting
 
-### Import Error: ModuleNotFoundError: No module named 'langchain_core.memory'
-This error has been fixed in the latest version. Make sure you have the latest `langchain-drasi`:
-```bash
-cd ../..  # Go to langchain-drasi root
-uv sync   # Or pip install -e .
-cd examples/terminator
-uv sync
-```
+### Agent not receiving notifications
+- Verify Drasi MCP server is running and accessible at `DRASI_SERVER_URL`
+- Check agent logs for subscription errors during setup phase
+- Ensure Drasi queries are correctly configured in `resources/queries.yaml`
 
-The terminator game uses `LangGraphMemoryHandler` which works with modern LangChain versions.
-
-### Terminators not moving
-- Check that the Drasi MCP server is running and accessible
-- Verify the `DRASI_SERVER_URL` in your `.env` file
-- Check terminator logs for subscription errors
-
-### Players can't join
-- Ensure PostgreSQL is running and accessible
-- Verify database credentials in `.env`
-- Check that the `player` table exists
-
-### WebSocket connection fails
-- Make sure the backend server is running on port 8000
-- Check browser console for connection errors
-
-### Port 8000 already in use
-If you see "address already in use" error:
-```bash
-# Find and kill the process using port 8000
-lsof -ti:8000 | xargs kill -9
-# Or use a different port
-uvicorn backend:app --host 0.0.0.0 --port 8001
-```
-
-## License
-
-MIT License - see the main repository for details.
+### Agent not subscribing to queries
+- Check that the LLM has access to the drasi_tool in the workflow
+- Verify the setup prompt is being sent to the LLM
+- Look for tool call errors in the agent logs
 
 ## Learn More
 

@@ -58,7 +58,7 @@ Do this now."""
         # Return response - MessagesState automatically appends to messages
         return {"messages": [response]}
 
-    async def wait_for_data_node(self, state: HuntingState) -> HuntingState:
+    async def check_sensors(self, state: HuntingState) -> HuntingState:
         """Node: Wait briefly and check for new notifications."""
         if len(state.get("path", [])) > 0:
             await asyncio.sleep(0.2)
@@ -227,7 +227,7 @@ def build_hunting_workflow(agent, drasi_tool) -> StateGraph:
     workflow.add_node("setup_queries_prompt", nodes.setup_queries_prompt_node)
     workflow.add_node("setup_queries_call_model", nodes.call_model_node)
     workflow.add_node("setup_queries_tools", ToolNode([drasi_tool]))
-    workflow.add_node("wait_for_data", nodes.wait_for_data_node)
+    workflow.add_node("check_sensors", nodes.check_sensors)
     workflow.add_node("evaluate_targets", nodes.evaluate_targets_node)
     workflow.add_node("select_and_plan", nodes.select_and_plan_node)
     workflow.add_node("execute_move", nodes.execute_move_node)
@@ -236,10 +236,10 @@ def build_hunting_workflow(agent, drasi_tool) -> StateGraph:
     def route_start(state: HuntingState) -> str:
         """Skip setup if already initialized."""
         if agent.initialized:
-            return "wait_for_data"
+            return "check_sensors"
         return "setup_queries_prompt"
 
-    workflow.add_conditional_edges(START, route_start, ["setup_queries_prompt", "wait_for_data"])
+    workflow.add_conditional_edges(START, route_start, ["setup_queries_prompt", "check_sensors"])
     workflow.add_edge("setup_queries_prompt", "setup_queries_call_model")
 
     def should_continue_setup(state: HuntingState) -> str:
@@ -247,7 +247,7 @@ def build_hunting_workflow(agent, drasi_tool) -> StateGraph:
         last_message = state["messages"][-1]
         if hasattr(last_message, 'tool_calls') and last_message.tool_calls:
             return "setup_queries_tools"
-        return "wait_for_data"
+        return "check_sensors"
 
     def route_after_wait(state: HuntingState) -> str:
         """Route based on whether we need fresh targets or can proceed."""
@@ -266,13 +266,13 @@ def build_hunting_workflow(agent, drasi_tool) -> StateGraph:
         # No targets or path, just execute (will patrol)
         return "execute_move"
 
-    workflow.add_conditional_edges("setup_queries_call_model", should_continue_setup, ["setup_queries_tools", "wait_for_data"])
+    workflow.add_conditional_edges("setup_queries_call_model", should_continue_setup, ["setup_queries_tools", "check_sensors"])
     workflow.add_edge("setup_queries_tools", "setup_queries_call_model")  # Loop back for more tool calls
 
     # Main hunting loop
-    workflow.add_conditional_edges("wait_for_data", route_after_wait, ["evaluate_targets", "select_and_plan", "execute_move"])
+    workflow.add_conditional_edges("check_sensors", route_after_wait, ["evaluate_targets", "select_and_plan", "execute_move"])
     workflow.add_edge("evaluate_targets", "select_and_plan")
     workflow.add_edge("select_and_plan", "execute_move")
-    workflow.add_edge("execute_move", "wait_for_data")  # Loop back
+    workflow.add_edge("execute_move", "check_sensors")  # Loop back
 
     return workflow.compile()
