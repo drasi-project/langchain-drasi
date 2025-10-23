@@ -1,17 +1,17 @@
 # Makefile for Terminator Game
 
-.PHONY: help install backend agents init-db setup-env setup clean
+.PHONY: help install backend terminator init-db setup-env setup clean
 
 # Default target - show available commands
 help:
 	@echo "Available targets:"
-	@echo "  make install    - Install dependencies using uv"
-	@echo "  make backend    - Run the backend server"
-	@echo "  make agents     - Run a terminator agent"
-	@echo "  make init-db    - Initialize the database"
-	@echo "  make setup-env  - Create .env from example"
-	@echo "  make setup      - Full setup (env + install)"
-	@echo "  make clean      - Clean up generated files"
+	@echo "  make install     - Install dependencies using uv"
+	@echo "  make backend     - Run the backend server"
+	@echo "  make terminator  - Run a terminator agent"
+	@echo "  make init-db     - Initialize the database"
+	@echo "  make setup-env   - Create .env from example"
+	@echo "  make setup       - Full setup (env + install)"
+	@echo "  make clean       - Clean up generated files"
 
 # Install dependencies using uv
 install:
@@ -22,7 +22,7 @@ backend:
 	uv run python backend.py
 
 # Run a terminator agent
-agents:
+terminator:
 	uv run python terminator.py
 
 # Initialize the database
@@ -49,7 +49,7 @@ setup: setup-env install
 	@echo "  2. Run 'make init-db' to initialize the database"
 	@echo "  3. Configure Drasi with resources in resources/"
 	@echo "  4. Run 'make backend' in one terminal"
-	@echo "  5. Run 'make agents' in another terminal (run multiple times for multiple agents)"
+	@echo "  5. Run 'make terminator' in another terminal (run multiple times for multiple agents)"
 
 # Clean up generated files
 clean:

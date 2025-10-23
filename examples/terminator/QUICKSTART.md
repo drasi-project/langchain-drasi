@@ -58,12 +58,12 @@ drasi apply -f resources/queries.yaml
 
 **Terminal 1:**
 ```bash
-./run-backend.sh
+make backend
 ```
 
 **Terminal 2:**
 ```bash
-./run-agents.sh
+make terminator
 ```
 
 ## Play

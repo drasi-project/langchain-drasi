@@ -22,10 +22,10 @@ psql -d game -f init_db.sql
 # 5. Configure Drasi (see Setup section)
 
 # 6. Run backend (terminal 1)
-./run-backend.sh
+make backend
 
 # 7. Run agents (terminal 2)
-./run-agents.sh
+make terminator
 
 # 8. Play at http://localhost:8000
 ```
@@ -168,18 +168,18 @@ This will:
 
 You need to run two processes: the backend server and the terminator agents.
 
-### Option 1: Using convenience scripts (easiest)
+### Option 1: Using Makefile (easiest)
 
 **Terminal 1 - Backend Server:**
 ```bash
 cd examples/terminator
-./run-backend.sh
+make backend
 ```
 
 **Terminal 2 - Terminator Agents:**
 ```bash
 cd examples/terminator
-./run-agents.sh
+make terminator
 ```
 
 ### Option 2: Using uv directly
@@ -193,26 +193,10 @@ uv run python backend.py
 **Terminal 2 - Terminator Agents:**
 ```bash
 cd examples/terminator
-uv run python main.py
+uv run python terminator.py
 ```
 
 > **Note:** `uv run` automatically uses the virtual environment created by `uv sync`
-
-### Option 3: Using just (if installed)
-
-If you have [just](https://just.systems) installed:
-
-```bash
-# One-time setup
-just setup
-just init-db
-
-# Run backend
-just backend
-
-# Run agents (in another terminal)
-just agents
-```
 
 ## How to Play
 
@@ -245,20 +229,24 @@ Each terminator is an autonomous LangGraph agent that:
 
 - **`game_map.py`** - Map definition with walls and collision detection
 - **`backend.py`** - FastAPI server with player CRUD and WebSocket support
-- **`terminator_agent.py`** - LangGraph agent implementation with Drasi integration
-- **`main.py`** - Entry point that runs the 3 terminator agents
+- **`agent/`** - Modular agent implementation with Drasi integration
+  - **`agent/terminator.py`** - Main TerminatorAgent class
+  - **`agent/workflow.py`** - LangGraph workflow and hunting logic
+  - **`agent/sensor.py`** - Drasi notification handler
+  - **`agent/pathfinding.py`** - BFS pathfinding utilities
+- **`terminator.py`** - Entry point that spawns a terminator agent
 - **`static/index.html`** - Web UI for players
 
 ### Real-Time Synchronization
 
-The backend uses a **periodic broadcast system** to keep all clients synchronized:
+The backend uses an **event-driven webhook system** to keep all clients synchronized:
 
-- Every 500ms, the backend queries the database for ALL players (including terminators)
-- Broadcasts a `state_update` message to all connected WebSocket clients
-- Frontend updates all player positions, including terminators (rendered as red markers)
-- Detects when players are eliminated (no longer in the update)
+- External services (like Drasi) send HTTP requests to `/changes/{player_id}` webhooks when positions change
+- Backend broadcasts position updates to all connected WebSocket clients
+- Frontend updates all player positions in real-time, including terminators (rendered as red markers)
+- DELETE requests to `/changes/{player_id}` notify clients when players are eliminated
 
-This ensures terminators are visible to players even though they update the database directly rather than using the move API.
+This event-driven architecture eliminates the need for database polling and ensures low-latency updates.
 
 ### Drasi Integration
 
@@ -313,10 +301,10 @@ Players and terminators spawn at random valid positions and cannot walk through 
 
 ### Adjust Terminator Behavior
 
-In `terminator_agent.py`, you can modify:
-- **Move speed** - Change the `await asyncio.sleep(1.0)` value in `run_terminator()`
-- **AI temperature** - Adjust the LLM temperature for more/less random behavior
-- **Number of terminators** - Modify the loop in `main.py` to spawn more or fewer
+In `agent/workflow.py`, you can modify:
+- **Move speed** - Change the `await asyncio.sleep()` values in the workflow nodes
+- **AI temperature** - Adjust the LLM temperature in `terminator.py` for more/less random behavior
+- **Number of terminators** - Run `make terminator` multiple times in separate terminals to spawn more agents
 
 ### Modify the Map
 
