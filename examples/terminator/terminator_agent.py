@@ -23,7 +23,6 @@ This file focuses on the Drasi setup and agent lifecycle.
 
 import asyncio
 import os
-import asyncpg
 from dotenv import load_dotenv
 from langchain_openai import AzureChatOpenAI
 
@@ -33,7 +32,7 @@ from agent import TerminatorAgent
 load_dotenv()
 
 
-async def run_terminator(agent_id: str, db_pool: asyncpg.Pool) -> None:
+async def run_terminator(agent_id: str, api_base_url: str = "http://localhost:8000") -> None:
     # Configure LLM
     llm = AzureChatOpenAI(
         azure_deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini"),
@@ -45,7 +44,7 @@ async def run_terminator(agent_id: str, db_pool: asyncpg.Pool) -> None:
     drasi_server_url = os.getenv("DRASI_SERVER_URL", "http://localhost:8083")
 
     # Create and initialize terminator with Drasi integration
-    terminator = TerminatorAgent(agent_id, db_pool, drasi_server_url, llm)
+    terminator = TerminatorAgent(agent_id, api_base_url, drasi_server_url, llm)
     await terminator.initialize()
 
     try:

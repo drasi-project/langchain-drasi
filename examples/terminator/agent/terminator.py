@@ -1,12 +1,11 @@
 """Terminator agent that hunts players using Drasi real-time queries."""
 
 import os
-import asyncpg
+import httpx
 from langchain_openai import AzureChatOpenAI
 
 from langchain_drasi import create_drasi_tool, MCPConnectionConfig
 
-from game_map import get_random_spawn_position
 from .sensor import SensorHandler
 from .workflow import build_hunting_workflow, HuntingState
 
@@ -17,13 +16,14 @@ class TerminatorAgent:
     def __init__(
         self,
         agent_id: str,
-        db_pool: asyncpg.Pool,
+        api_base_url: str,
         drasi_server_url: str,
         llm: AzureChatOpenAI,
     ):
         self.agent_id = agent_id
-        self.db_pool = db_pool
-        self.x, self.y = get_random_spawn_position()
+        self.api_base_url = api_base_url
+        self.http_client = httpx.AsyncClient(base_url=api_base_url, timeout=10.0)
+        self.x, self.y = 0, 0  # Will be set by initialize()
         self.llm = llm
 
         # Create Drasi notification handler
@@ -52,51 +52,68 @@ class TerminatorAgent:
         self.hunting_workflow = build_hunting_workflow(self, self.drasi_tool)
 
     async def initialize(self) -> None:
-        """Initialize the terminator by inserting into database."""
-        async with self.db_pool.acquire() as conn:
-            try:
-                await conn.execute(
-                    "INSERT INTO player (id, x, y, type) VALUES ($1, $2, $3, $4)",
-                    self.agent_id, self.x, self.y, 'ai'
-                )
-            except asyncpg.UniqueViolationError:
-                # Already exists, update position
-                await conn.execute(
-                    "UPDATE player SET x = $1, y = $2, type = $3 WHERE id = $4",
-                    self.x, self.y, 'ai', self.agent_id
-                )
+        """Initialize the terminator by creating via API."""
+        try:
+            response = await self.http_client.post(
+                "/api/players",
+                json={"id": self.agent_id, "type": "ai"}
+            )
+            response.raise_for_status()
+            player_data = response.json()
+            self.x = player_data["x"]
+            self.y = player_data["y"]
+            print(f"[{self.agent_id}] Spawned at ({self.x}, {self.y})")
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 400:
+                # Player already exists, get current position
+                response = await self.http_client.get(f"/api/players/{self.agent_id}")
+                response.raise_for_status()
+                player_data = response.json()
+                self.x = player_data["x"]
+                self.y = player_data["y"]
+                print(f"[{self.agent_id}] Already exists at ({self.x}, {self.y})")
+            else:
+                raise
 
-        print(f"[{self.agent_id}] Spawned at ({self.x}, {self.y})")
         print(f"[{self.agent_id}] Query subscriptions will be set up by workflow")
 
     async def _move_to(self, new_x: int, new_y: int) -> None:
-        """Move to a new position and check collisions."""
-        async with self.db_pool.acquire() as conn:
-            await conn.execute(
-                "UPDATE player SET x = $1, y = $2 WHERE id = $3",
-                new_x, new_y, self.agent_id
-            )
+        """Move to a new position. Collisions are detected by the server."""
+        # Calculate direction from current position to new position
+        direction = None
+        if new_y < self.y:
+            direction = "up"
+        elif new_y > self.y:
+            direction = "down"
+        elif new_x < self.x:
+            direction = "left"
+        elif new_x > self.x:
+            direction = "right"
 
-        self.x, self.y = new_x, new_y
-        print(f"[{self.agent_id}] Moved to ({self.x}, {self.y})")
+        if direction:
+            try:
+                response = await self.http_client.post(
+                    f"/api/players/{self.agent_id}/move",
+                    json={"direction": direction}
+                )
+                response.raise_for_status()
+                move_data = response.json()
+                self.x = move_data["x"]
+                self.y = move_data["y"]
+                print(f"[{self.agent_id}] Moved to ({self.x}, {self.y})")
 
-        await self.check_collisions()
-
-    async def check_collisions(self) -> None:
-        """Check if the terminator has caught any players."""
-        async with self.db_pool.acquire() as conn:
-            # Find human players at the same position
-            caught_players = await conn.fetch(
-                "SELECT id FROM player WHERE x = $1 AND y = $2 AND id != $3 AND type = 'human'",
-                self.x, self.y, self.agent_id
-            )
-
-            for row in caught_players:
-                player_id = row["id"]
-                await conn.execute("DELETE FROM player WHERE id = $1", player_id)
-                print(f"[{self.agent_id}] ⚡ ELIMINATED player '{player_id}' at ({self.x},{self.y})!")
-                # Log to sensor so LLM knows this area is now clear
-                self.sensor_handler.custom_log(f"Successfully eliminated player {player_id} at position ({self.x},{self.y})")
+                # Check if any players were eliminated
+                eliminated = move_data.get("eliminated_players", [])
+                for player_id in eliminated:
+                    print(f"[{self.agent_id}] ⚡ ELIMINATED player '{player_id}' at ({self.x},{self.y})!")
+                    # Log to sensor so LLM knows this area is now clear
+                    self.sensor_handler.custom_log(f"Successfully eliminated player {player_id} at position ({self.x},{self.y})")
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 404:
+                    print(f"[{self.agent_id}] ⚠ Player not found, may have been eliminated")
+                else:
+                    print(f"[{self.agent_id}] ⚠ Move failed: {e}")
+                return
 
     async def run(self) -> None:
         """Run the terminator continuously with the hunting workflow."""
@@ -120,4 +137,5 @@ class TerminatorAgent:
 
     async def shutdown(self) -> None:
         """Clean up the terminator."""
+        await self.http_client.aclose()
         print(f"[{self.agent_id}] Shutdown")

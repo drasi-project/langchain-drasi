@@ -50,6 +50,7 @@ class Player(BaseModel):
 class PlayerCreate(BaseModel):
     """Player creation request."""
     id: str
+    type: str = 'human'  # Optional: 'human' or 'ai', defaults to 'human'
 
 
 class MoveRequest(BaseModel):
@@ -62,6 +63,15 @@ class PlayerPosition(BaseModel):
     x: int
     y: int
     type: str  # 'human' or 'ai'
+
+
+class MoveResponse(BaseModel):
+    """Response from move endpoint including collision information."""
+    id: str
+    x: int
+    y: int
+    type: str
+    eliminated_players: list[str] = []  # List of player IDs eliminated in this move
 
 
 @asynccontextmanager
@@ -152,12 +162,12 @@ async def create_player(player: PlayerCreate):
         try:
             await conn.execute(
                 "INSERT INTO player (id, x, y, type) VALUES ($1, $2, $3, $4)",
-                player.id, x, y, 'human'
+                player.id, x, y, player.type
             )
         except asyncpg.UniqueViolationError:
             raise HTTPException(status_code=400, detail="Player ID already exists")
 
-    new_player = Player(id=player.id, x=x, y=y, type='human')
+    new_player = Player(id=player.id, x=x, y=y, type=player.type)
 
     # Broadcast player joined
     await broadcast_update({
@@ -188,9 +198,9 @@ async def delete_player(player_id: str):
     return {"message": "Player deleted"}
 
 
-@app.post("/api/players/{player_id}/move", response_model=Player)
+@app.post("/api/players/{player_id}/move", response_model=MoveResponse)
 async def move_player(player_id: str, move: MoveRequest):
-    """Move a player in the specified direction."""
+    """Move a player in the specified direction and check for collisions."""
     if not db_pool:
         raise HTTPException(status_code=500, detail="Database not connected")
 
@@ -226,15 +236,46 @@ async def move_player(player_id: str, move: MoveRequest):
             new_x, new_y, player_id
         )
 
-    updated_player = Player(id=player_id, x=new_x, y=new_y, type=player_type)
+    # Check for collisions (only if moving player is AI terminator)
+    eliminated_players = []
+    if player_type == "ai":
+        async with db_pool.acquire() as conn:
+            # Find human players at the same position
+            caught = await conn.fetch(
+                "SELECT id FROM player WHERE x = $1 AND y = $2 AND id != $3 AND type = 'human'",
+                new_x, new_y, player_id
+            )
+
+            for caught_player in caught:
+                caught_id = caught_player["id"]
+                # Delete the caught player
+                await conn.execute("DELETE FROM player WHERE id = $1", caught_id)
+                eliminated_players.append(caught_id)
+
+                # Broadcast player elimination
+                await broadcast_update({
+                    "type": "player_left",
+                    "player_id": caught_id
+                })
 
     # Broadcast player moved
     await broadcast_update({
         "type": "player_moved",
-        "player": updated_player.model_dump()
+        "player": {
+            "id": player_id,
+            "x": new_x,
+            "y": new_y,
+            "type": player_type
+        }
     })
 
-    return updated_player
+    return MoveResponse(
+        id=player_id,
+        x=new_x,
+        y=new_y,
+        type=player_type,
+        eliminated_players=eliminated_players
+    )
 
 
 @app.get("/api/map")
