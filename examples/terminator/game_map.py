@@ -22,9 +22,8 @@ WALLS = [
     (MAP_WIDTH-1, 0, MAP_WIDTH-1, MAP_HEIGHT-1),
 
     # Internal walls - row 1-3
-    (12, 1, 12, 3),
-    (27, 1, 27, 3),
-    (47, 1, 47, 3),
+    (26, 1, 26, 3),
+    (46, 1, 46, 3),
 
     # Horizontal wall - row 4
     (0, 4, 11, 4),
@@ -33,9 +32,9 @@ WALLS = [
     (51, 4, MAP_WIDTH-1, 4),
 
     # Internal walls - row 5-8
-    (12, 5, 12, 8),
-    (27, 5, 27, 6),
-    (47, 5, 47, 8),
+    (11, 5, 11, 8),
+    (26, 5, 26, 6),
+    (46, 5, 46, 8),
 
     # Horizontal wall - row 9
     (0, 9, 8, 9),

@@ -29,6 +29,8 @@ from game_map import (
     WALL_CELLS,
 )
 
+from collections import deque
+
 # Load environment variables
 load_dotenv()
 
@@ -93,6 +95,7 @@ class HuntingState(MessagesState):
     current_target: str | None
     reevaluate_plan: bool
     sensor_log: list[str]
+    known_targets: list[dict]  # List of {"player_id": str, "x": int, "y": int}
 
 
 class TerminatorAgent:
@@ -138,7 +141,46 @@ class TerminatorAgent:
     # ------------------------------------------------------------------------
     # Path Validation & Planning Helpers
     # ------------------------------------------------------------------------
-    
+
+    def _find_path_bfs(self, start: tuple[int, int], goal: tuple[int, int]) -> list[tuple[int, int]]:
+        """Find shortest path from start to goal using BFS, avoiding walls."""
+        if start == goal:
+            print(f"[{self.agent_id}] BFS: start == goal at {start}")
+            return []
+
+        # Check if goal is a wall
+        if goal in WALL_CELLS:
+            print(f"[{self.agent_id}] BFS: goal {goal} is a WALL!")
+            return []
+
+        queue = deque([(start, [])])
+        visited = {start}
+        max_iterations = MAP_WIDTH * MAP_HEIGHT  # Safety limit
+
+        iteration = 0
+        while queue and iteration < max_iterations:
+            iteration += 1
+            (x, y), path = queue.popleft()
+
+            # Check all adjacent positions
+            for next_x, next_y in get_adjacent_positions(x, y):
+                if (next_x, next_y) in visited:
+                    continue
+
+                visited.add((next_x, next_y))
+                new_path = path + [(next_x, next_y)]
+
+                # Found the goal
+                if (next_x, next_y) == goal:
+                    print(f"[{self.agent_id}] BFS: Found path in {iteration} iterations, {len(new_path)} steps")
+                    return new_path
+
+                queue.append(((next_x, next_y), new_path))
+
+        # No path found
+        print(f"[{self.agent_id}] BFS: No path found from {start} to {goal} (visited {len(visited)} cells)")
+        return []
+
     def _get_local_map_view(self, center_x: int, center_y: int, radius: int = 15) -> str:
         """Generate an ASCII map view centered on a position."""
         lines = []
@@ -187,40 +229,39 @@ class TerminatorAgent:
         except json.JSONDecodeError:
             return None
 
-    def _build_planning_prompt(self, current_x: int, current_y: int, sensor_log: list[str]) -> str:
-        """Build the planning prompt for the LLM."""
-        local_map = self._get_local_map_view(current_x, current_y, radius=15)
+    def _build_targets_prompt(self, sensor_log: list[str]) -> str:
+        """Build the prompt for LLM to extract all known targets from sensor data."""
+        return f"""You are a terminator AI analyzing sensor data.
 
-        return f"""You are a terminator AI at position ({current_x}, {current_y}).
-
-Local map (T=you, #=wall, .=open):
-{local_map}
-
-sensor log:
+Recent sensor log:
 {sensor_log}
 
-Task: Find CLOSEST player and create step-by-step path avoiding walls.
+Task: Extract a list of ALL human players currently known to be alive, with their last known positions.
 
 Algorithm:
-1. Identify closest player from notifications
-2. Plan the most direct path one cell at a time (up/down/left/right only)
-3. Each step must be on '.' (open space), never on '#' (wall)
-4. If blocked, route AROUND walls
+1. Review all sensor notifications
+2. Track each player's last known position from "added" or "updated" notifications
+3. Remove any players that appear in "deleted" notifications (already eliminated)
+4. Return the complete list of surviving players with their coordinates
 
 Rules:
-- Move only to adjacent cell (1 cell up/down/left/right)
-- Never move to '#' wall cells
-- Each step exactly 1 Manhattan distance from previous
+- Include ALL active players, not just the closest
+- Use the MOST RECENT position for each player
+- Exclude players marked as "deleted" or "eliminated"
+- Player IDs starting with "T-" are terminators, not human players - IGNORE them
+- Only include human players (non-terminator players)
 
 IMPORTANT: Output ONLY JSON, no text before or after.
 
 JSON format:
 {{
-  "target_player": "player_id",
-  "path": [{{"x": 10, "y": 5}}, {{"x": 11, "y": 5}}, ...]
+  "targets": [
+    {{"player_id": "alice", "x": 10, "y": 5}},
+    {{"player_id": "bob", "x": 15, "y": 8}}
+  ]
 }}
 
-If no unvisited players: {{"target_player": null, "path": []}}
+If no valid players: {{"targets": []}}
 
 JSON:"""
 
@@ -236,7 +277,8 @@ JSON:"""
         workflow.add_node("setup_queries_call_model", self._call_model_node)
         workflow.add_node("setup_queries_tools", ToolNode([self.drasi_tool]))
         workflow.add_node("wait_for_data", self._wait_for_data_node)
-        workflow.add_node("evaluate_and_plan", self._evaluate_and_plan_node)
+        workflow.add_node("evaluate_targets", self._evaluate_targets_node)
+        workflow.add_node("select_and_plan", self._select_and_plan_node)
         workflow.add_node("execute_move", self._execute_move_node)
 
         # Add edges
@@ -256,19 +298,31 @@ JSON:"""
                 return "setup_queries_tools"
             return "wait_for_data"
 
-
-        def should_reassess(state: HuntingState) -> str:
+        def route_after_wait(state: HuntingState) -> str:
+            """Route based on whether we need fresh targets or can proceed."""
+            # If reevaluate_plan is True, get fresh targets from LLM
             if state.get("reevaluate_plan", False):
-                return "evaluate_and_plan"
+                return "evaluate_targets"
+
+            # If we have a path, execute it
+            if state.get("path"):
+                return "execute_move"
+
+            # If we have known targets, select and plan
+            if state.get("known_targets"):
+                return "select_and_plan"
+
+            # No targets or path, just execute (will patrol)
             return "execute_move"
 
         workflow.add_conditional_edges("setup_queries_call_model", should_continue_setup, ["setup_queries_tools", "wait_for_data"])
         workflow.add_edge("setup_queries_tools", "setup_queries_call_model")  # Loop back for more tool calls
 
         # Main hunting loop
-        workflow.add_conditional_edges("wait_for_data", should_reassess, ["evaluate_and_plan", "execute_move"])
-        workflow.add_edge("evaluate_and_plan", "execute_move")
-        workflow.add_edge("execute_move", "wait_for_data")  # Loop back to wait for next iteration
+        workflow.add_conditional_edges("wait_for_data", route_after_wait, ["evaluate_targets", "select_and_plan", "execute_move"])
+        workflow.add_edge("evaluate_targets", "select_and_plan")
+        workflow.add_edge("select_and_plan", "execute_move")
+        workflow.add_edge("execute_move", "wait_for_data")  # Loop back
 
         return workflow.compile()
 
@@ -313,20 +367,24 @@ Do this now."""
 
         return state
 
-    async def _evaluate_and_plan_node(self, state: HuntingState) -> HuntingState:
-        current_x, current_y = state['current_position']
+    async def _evaluate_targets_node(self, state: HuntingState) -> HuntingState:
+        """Node: Use LLM to extract list of all known targets from sensor data."""
+        return await self._evaluate_targets_with_llm(state["sensor_log"])
 
-        return await self._plan_path_with_llm(current_x, current_y, state["sensor_log"])
+    async def _select_and_plan_node(self, state: HuntingState) -> HuntingState:
+        """Node: Select closest target and plan BFS path (code-based, no LLM)."""
+        current_x, current_y = state['current_position']
+        known_targets = state.get("known_targets", [])
+        return self._select_closest_and_plan(current_x, current_y, known_targets)
 
     def _random_patrol_move(self, x: int, y: int) -> dict:
-        valid_moves = get_adjacent_positions(x, y)        
+        valid_moves = get_adjacent_positions(x, y)
         return {"path": [random.choice(valid_moves)], "current_target": None}
 
-    async def _plan_path_with_llm(self, current_x: int, current_y: int, sensor_log: list[str]) -> dict:
-        """Use LLM to plan a path to the closest player."""
-        
-        planning_prompt = self._build_planning_prompt(current_x, current_y, sensor_log)
-        response = await self.llm.ainvoke([HumanMessage(content=planning_prompt)])
+    async def _evaluate_targets_with_llm(self, sensor_log: list[str]) -> dict:
+        """Use LLM to extract all known targets from sensor data."""
+        targets_prompt = self._build_targets_prompt(sensor_log)
+        response = await self.llm.ainvoke([HumanMessage(content=targets_prompt)])
         response_text = response.content.strip()
 
         # Parse JSON response
@@ -334,11 +392,48 @@ Do this now."""
         if not result:
             print(f"[{self.agent_id}] ⚠ Could not parse JSON from LLM response.")
             print(f"[{self.agent_id}] Response: {response_text[:200]}")
+            return {"known_targets": []}
+
+        # Extract targets list
+        targets = result.get("targets", [])
+        print(f"[{self.agent_id}] LLM identified {len(targets)} targets: {[t['player_id'] for t in targets]}")
+
+        return {"known_targets": targets, "reevaluate_plan": False}
+
+    def _select_closest_and_plan(self, current_x: int, current_y: int, known_targets: list[dict]) -> dict:
+        """Select the closest target and plan a BFS path to it (code-based, no LLM)."""
+        if not known_targets:
+            print(f"[{self.agent_id}] No known targets to hunt")
             return self._random_patrol_move(current_x, current_y)
 
-        # Extract path and target
-        target_player = result.get("target_player")
-        path = [(step["x"], step["y"]) for step in result.get("path", [])]
+        # Calculate distance to each target
+        distances = []
+        for target in known_targets:
+            target_x = target["x"]
+            target_y = target["y"]
+            dist = abs(current_x - target_x) + abs(current_y - target_y)
+            distances.append((dist, target))
+
+        # Sort by distance and pick closest
+        distances.sort(key=lambda x: x[0])
+        closest_dist, closest_target = distances[0]
+
+        target_player = closest_target["player_id"]
+        target_x = closest_target["x"]
+        target_y = closest_target["y"]
+
+        print(f"[{self.agent_id}] Selected closest target: {target_player} at ({target_x},{target_y}), distance={closest_dist}")
+
+        # Use BFS to find optimal path
+        path = self._find_path_bfs((current_x, current_y), (target_x, target_y))
+
+        if not path:
+            print(f"[{self.agent_id}] ⚠ No valid path to {target_player} at ({target_x},{target_y})")
+            # Remove unreachable target from list
+            updated_targets = [t for t in known_targets if t["player_id"] != target_player]
+            return {"known_targets": updated_targets, "path": [], "current_target": None}
+
+        print(f"[{self.agent_id}] ✓ BFS found path with {len(path)} steps")
 
         # Update path and target
         return self._update_path_and_target(target_player, path)
@@ -365,6 +460,7 @@ Do this now."""
     async def _execute_move_node(self, state: HuntingState) -> HuntingState:
         """Node: Execute the next move in the path."""
         path = state.get("path", [])
+        known_targets = state.get("known_targets", [])
 
         if not path:
             # No path, patrol randomly
@@ -373,7 +469,7 @@ Do this now."""
                 new_x, new_y = random.choice(valid_moves)
                 await self._move_to(new_x, new_y)
                 print(f"[{self.agent_id}] Patrolling")
-            return {"current_position": (self.x, self.y)}
+            return {"current_position": (self.x, self.y), "path": []}
 
         # Take next step from path
         next_x, next_y = path[0]
@@ -386,20 +482,34 @@ Do this now."""
             # Update path - remove completed step
             self.current_path = path[1:]
 
-            # Check if we've reached the target
+            # Check if we've reached the end of the path (target reached)
             if len(self.current_path) == 0 and self.current_target:
-                print(f"[{self.agent_id}] Reached target {self.current_target}")
-                self.sensor_handler.custom_log(f"Eliminated player {self.current_target} at ({self.x},{self.y}), nothing here anymore.")
+                print(f"[{self.agent_id}] ✓ Reached target location for {self.current_target}")
+
+                # Remove this target from known_targets list
+                updated_targets = [t for t in known_targets if t["player_id"] != self.current_target]
+                print(f"[{self.agent_id}] Removed {self.current_target} from targets, {len(updated_targets)} remaining")
+
+                # Log to sensor for LLM context
+                self.sensor_handler.custom_log(f"Reached target position for {self.current_target} at ({next_x},{next_y})")
+
+                # Clear current target and trigger fresh evaluation
                 self.current_target = None
+                return {
+                    "current_position": (self.x, self.y),
+                    "path": [],
+                    "known_targets": updated_targets,
+                    "reevaluate_plan": True  # Get fresh target list from LLM
+                }
             elif self.current_target:
                 print(f"[{self.agent_id}] {len(self.current_path)} steps remaining to {self.current_target}")
 
-            return {"current_position": (self.x, self.y)}
+            return {"current_position": (self.x, self.y), "path": self.current_path}
         else:
-            # Hit an invalid move (wall or obstacle)
+            # Hit an invalid move (wall or obstacle) - shouldn't happen with BFS but just in case
             print(f"[{self.agent_id}] ⚠ Hit invalid move to ({next_x},{next_y}), forcing replan")
             self.current_path = []
-            return {"current_position": (self.x, self.y), "reevaluate_plan": True}
+            return {"current_position": (self.x, self.y), "path": [], "reevaluate_plan": True}
 
     # ------------------------------------------------------------------------
     # Game Logic (Movement & Collision)
@@ -450,7 +560,9 @@ Do this now."""
             for row in caught_players:
                 player_id = row["id"]
                 await conn.execute("DELETE FROM player WHERE id = $1", player_id)
-                print(f"[{self.agent_id}] ELIMINATED player '{player_id}'!")
+                print(f"[{self.agent_id}] ⚡ ELIMINATED player '{player_id}' at ({self.x},{self.y})!")
+                # Log to sensor so LLM knows this area is now clear
+                self.sensor_handler.custom_log(f"Successfully eliminated player {player_id} at position ({self.x},{self.y})")
 
     # ------------------------------------------------------------------------
     # Lifecycle Methods
@@ -466,6 +578,7 @@ Do this now."""
             "current_target": self.current_target,
             "reevaluate_plan": False,
             "sensor_log": [],
+            "known_targets": [],
         }
 
         # Run the workflow - it will loop internally with high recursion limit
