@@ -24,12 +24,11 @@ class TerminatorState(MessagesState):
     known_targets: list[dict]  # List of {"player_id": str, "x": int, "y": int}
 
 
-def build_hunting_workflow(agent, drasi_tool) -> StateGraph:
-    """Build the LangGraph workflow for hunting behavior."""
-    workflow = StateGraph(TerminatorState)
+# Node factory functions - each returns a node function with access to agent/drasi_tool
 
-    # Node implementations defined as closures with access to agent
-    async def setup_queries_prompt_node(state: TerminatorState) -> TerminatorState:
+def setup_queries_prompt_node(agent):
+    """Factory for setup queries prompt node."""
+    async def node(state: TerminatorState) -> TerminatorState:
         """Node: Add initial prompt for query setup (only once)."""
         if agent.initialized:
             return state
@@ -37,14 +36,18 @@ def build_hunting_workflow(agent, drasi_tool) -> StateGraph:
         print(f"[{agent.agent_id}] Setting up query subscriptions...")
 
         setup_prompt = """You have access to the drasi_query tool. Use it to:
-1. Discover what queries are available (operation="discover")
-2. Subscribe to all queries that track player positions (operation="subscribe" with query_name)
+1. Discover what queries are available
+2. Subscribe to all queries that track player positions
 
 Do this now."""
 
         return {**state, "messages": [HumanMessage(content=setup_prompt)]}
+    return node
 
-    async def call_model_node(state: TerminatorState) -> TerminatorState:
+
+def call_model_node(agent):
+    """Factory for call model node."""
+    async def node(state: TerminatorState) -> TerminatorState:
         """Node: Call LLM with tools bound."""
         response = await agent.llm.bind_tools([agent.drasi_tool]).ainvoke(state["messages"])
 
@@ -55,8 +58,12 @@ Do this now."""
 
         # Return response - MessagesState automatically appends to messages
         return {"messages": [response]}
+    return node
 
-    async def check_sensors(state: TerminatorState) -> TerminatorState:
+
+def check_sensors_node(agent):
+    """Factory for check sensors node."""
+    async def node(state: TerminatorState) -> TerminatorState:
         """Node: Wait briefly and check for new notifications."""
         if len(state.get("path", [])) > 0:
             await asyncio.sleep(0.2)
@@ -67,8 +74,12 @@ Do this now."""
             return {"reevaluate_plan": True, "sensor_log": [*state["sensor_log"], *new_logs]}
 
         return state
+    return node
 
-    async def evaluate_targets_node(state: TerminatorState) -> TerminatorState:
+
+def evaluate_targets_node(agent):
+    """Factory for evaluate targets node."""
+    async def node(state: TerminatorState) -> TerminatorState:
         """Node: Use LLM to extract list of all known targets from sensor data."""
         targets_prompt = build_targets_prompt(state["sensor_log"])
         response = await agent.llm.ainvoke([HumanMessage(content=targets_prompt)])
@@ -86,8 +97,12 @@ Do this now."""
         print(f"[{agent.agent_id}] LLM identified {len(targets)} targets: {[t['player_id'] for t in targets]}")
 
         return {"known_targets": targets, "reevaluate_plan": False}
+    return node
 
-    async def select_and_plan_node(state: TerminatorState) -> TerminatorState:
+
+def select_and_plan_node(agent):
+    """Factory for select and plan node."""
+    async def node(state: TerminatorState) -> TerminatorState:
         """Node: Select closest target and plan BFS path (code-based, no LLM)."""
         current_x, current_y = state['current_position']
         known_targets = state.get("known_targets", [])
@@ -141,8 +156,12 @@ Do this now."""
             print(f"[{agent.agent_id}] No valid target")
 
         return {"path": path, "current_target": target_player, "reevaluate_plan": False}
+    return node
 
-    async def execute_move_node(state: TerminatorState) -> TerminatorState:
+
+def execute_move_node(agent):
+    """Factory for execute move node."""
+    async def node(state: TerminatorState) -> TerminatorState:
         """Node: Execute the next move in the path."""
         path = state.get("path", [])
         known_targets = state.get("known_targets", [])
@@ -195,15 +214,29 @@ Do this now."""
             # Hit an invalid move (wall or obstacle) - shouldn't happen with BFS but just in case
             print(f"[{agent.agent_id}] ⚠ Hit invalid move to ({next_x},{next_y}), forcing replan")
             return {"current_position": (agent.x, agent.y), "path": [], "reevaluate_plan": True}
+    return node
+
+
+def build_hunting_workflow(agent, drasi_tool) -> StateGraph:
+    """Build the LangGraph workflow for hunting behavior."""
+    workflow = StateGraph(TerminatorState)
+
+    # Create nodes using factories
+    setup_prompt = setup_queries_prompt_node(agent)
+    call_model = call_model_node(agent)
+    check_sensors = check_sensors_node(agent)
+    evaluate_targets = evaluate_targets_node(agent)
+    select_and_plan = select_and_plan_node(agent)
+    execute_move = execute_move_node(agent)
 
     # Add nodes
-    workflow.add_node("setup_queries_prompt", setup_queries_prompt_node)
-    workflow.add_node("setup_queries_call_model", call_model_node)
+    workflow.add_node("setup_queries_prompt", setup_prompt)
+    workflow.add_node("setup_queries_call_model", call_model)
     workflow.add_node("setup_queries_tools", ToolNode([drasi_tool]))
     workflow.add_node("check_sensors", check_sensors)
-    workflow.add_node("evaluate_targets", evaluate_targets_node)
-    workflow.add_node("select_and_plan", select_and_plan_node)
-    workflow.add_node("execute_move", execute_move_node)
+    workflow.add_node("evaluate_targets", evaluate_targets)
+    workflow.add_node("select_and_plan", select_and_plan)
+    workflow.add_node("execute_move", execute_move)
 
     # Add edges
     def route_start(state: TerminatorState) -> str:
