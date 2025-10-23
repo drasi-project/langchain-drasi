@@ -9,7 +9,7 @@ spec:
   query: >
     MATCH
       (p:player { type: 'human' })
-    WHERE drasi.trueLater(drasi.changeDateTime(p) <= (datetime.realtime() - duration( { seconds: 5 } )), drasi.changeDateTime(p) + duration( { seconds: 5 } ))
+    WHERE drasi.trueLater(drasi.changeDateTime(p) <= (datetime.realtime() - duration( { seconds: 3 } )), drasi.changeDateTime(p) + duration( { seconds: 3 } ))
 
     RETURN
       p.id,
@@ -20,7 +20,7 @@ spec:
 
 apiVersion: v1
 kind: ContinuousQuery
-name: idle-players
+name: fast-players
 spec:
   mode: query
   sources:
@@ -29,7 +29,7 @@ spec:
   query: >
     MATCH
       (p:player { type: 'human' })
-    WHERE drasi.trueLater(drasi.changeDateTime(p) <= (datetime.realtime() - duration( { seconds: 5 } )), drasi.changeDateTime(p) + duration( { seconds: 5 } ))
+    WHERE drasi.changeDateTime(p).epochMillis - drasi.previousValue(drasi.changeDateTime(p).epochMillis) < 1000
 
     RETURN
       p.id,

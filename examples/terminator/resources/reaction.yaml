@@ -11,4 +11,16 @@ spec:
           {
             "description": "Player {{after.id}} was idle at position ({{after.x}}, {{after.y}})"
           }
+    fast-players: |
+      description: "Position alert for players who have been fast for more than 1 second"
+      added:
+        template: |
+          {
+            "description": "Player {{after.id}} was fast at position ({{after.x}}, {{after.y}})"
+          }
+      deleted:
+        template: |
+          {
+            "description": "Player {{before.id}} is no longer at position ({{before.x}}, {{before.y}})"
+          }
 ---

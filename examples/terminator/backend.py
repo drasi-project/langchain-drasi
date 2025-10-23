@@ -287,40 +287,6 @@ async def get_map_info():
         "walls": WALLS,
     }
 
-
-# @app.put("/api/webhook/{player_id}")
-# async def player_position_changed(player_id: str, position: PlayerPosition):
-#     """
-#     Receive player position update from external service (e.g., Drasi).
-#     This endpoint does not modify the database - it only broadcasts to WebSocket clients.
-#     """
-#     # Broadcast player moved
-#     await broadcast_update({
-#         "type": "player_moved",
-#         "player": {
-#             "id": player_id,
-#             "x": position.x,
-#             "y": position.y,
-#             "type": position.type
-#         }
-#     })
-#     return {"message": "Position update broadcasted"}
-
-
-# @app.delete("/api/webhook/{player_id}")
-# async def player_removed(player_id: str):
-#     """
-#     Receive player removal notification from external service (e.g., Drasi).
-#     This endpoint does not modify the database - it only broadcasts to WebSocket clients.
-#     """
-#     # Broadcast player left
-#     await broadcast_update({
-#         "type": "player_left",
-#         "player_id": player_id
-#     })
-#     return {"message": "Player removal broadcasted"}
-
-
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint for real-time game updates."""
