@@ -215,10 +215,9 @@
             ws.onmessage = (event) => {
                 const message = JSON.parse(event.data);
 
-                if (message.type === 'initial_state' || message.type === 'state_update') {
-                    // Full state update - refresh all players
+                if (message.type === 'initial_state') {
+                    // Initial state when connecting - full player list
                     players.clear();
-                    let foundSelf = false;
                     message.players.forEach(p => {
                         players.set(p.id, p);
 
@@ -227,30 +226,27 @@
                             currentPlayer.x = p.x;
                             currentPlayer.y = p.y;
                             updatePositionDisplay();
-                            foundSelf = true;
                         }
                     });
-
-                    // If we're not in the state update, we've been terminated
-                    if (currentPlayer && !foundSelf && message.type === 'state_update') {
-                        showTerminated();
-                    }
                 } else if (message.type === 'player_joined') {
+                    // New player joined
                     players.set(message.player.id, message.player);
                 } else if (message.type === 'player_moved') {
+                    // Player position updated (from Drasi or manual move)
                     players.set(message.player.id, message.player);
 
                     // Update our position if it's us
-                    if (message.player.id === currentPlayer.id) {
+                    if (currentPlayer && message.player.id === currentPlayer.id) {
                         currentPlayer.x = message.player.x;
                         currentPlayer.y = message.player.y;
                         updatePositionDisplay();
                     }
                 } else if (message.type === 'player_left') {
+                    // Player removed (from Drasi or manual delete)
                     players.delete(message.player_id);
 
                     // Check if we were terminated
-                    if (message.player_id === currentPlayer.id) {
+                    if (currentPlayer && message.player_id === currentPlayer.id) {
                         showTerminated();
                     }
                 }
@@ -346,8 +342,8 @@
                 let color;
                 if (player.id === currentPlayer.id) {
                     color = '#00ff00'; // Green for self
-                } else if (player.id.startsWith('T-')) {
-                    color = '#ff0000'; // Red for terminators
+                } else if (player.type === 'ai') {
+                    color = '#ff0000'; // Red for terminators (AI players)
                 } else {
                     color = '#00aaff'; // Blue for other players
                 }

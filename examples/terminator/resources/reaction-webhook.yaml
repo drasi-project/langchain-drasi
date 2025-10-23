@@ -1,0 +1,34 @@
+kind: Reaction
+apiVersion: v1
+name: movements-webhook
+spec:
+  kind: Http
+  properties:
+    baseUrl: "http://host.docker.internal:8000/api"
+  queries:
+    all-positions: >
+      added:
+        url: "webhook/{{after.id}}"
+        method: "PUT"
+        body: |
+          {
+            "type": "{{after.type}}",
+            "x": "{{after.x}}",
+            "y": "{{after.y}}"
+          }
+        headers:
+          Content-Type: "application/json"
+      updated:
+        url: "webhook/{{after.id}}"
+        method: "PUT"
+        body: |
+          {
+            "type": "{{after.type}}",
+            "x": "{{after.x}}",
+            "y": "{{after.y}}"
+          }
+        headers:
+          Content-Type: "application/json"
+      deleted:
+        url: "webhook/{{before.id}}"
+        method: "DELETE"

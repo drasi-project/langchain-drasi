@@ -61,7 +61,7 @@ Do this now."""
     async def wait_for_data_node(self, state: HuntingState) -> HuntingState:
         """Node: Wait briefly and check for new notifications."""
         if len(state.get("path", [])) > 0:
-            await asyncio.sleep(0.4)
+            await asyncio.sleep(0.2)
         else:
             await asyncio.sleep(0.8)
         if self.agent.sensor_handler.has_new_notifications():

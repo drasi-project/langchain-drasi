@@ -6,13 +6,11 @@ This server provides:
 - PostgreSQL database integration
 """
 
-import asyncio
 import os
-from typing import List, Dict, Optional
+from typing import List, Optional
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import asyncpg
@@ -39,7 +37,6 @@ DB_NAME = os.getenv("DB_NAME", "game")
 # Global state
 db_pool: Optional[asyncpg.Pool] = None
 websocket_connections: List[WebSocket] = []
-broadcast_task: Optional[asyncio.Task] = None
 
 
 class Player(BaseModel):
@@ -47,6 +44,7 @@ class Player(BaseModel):
     id: str
     x: int
     y: int
+    type: str  # 'human' or 'ai'
 
 
 class PlayerCreate(BaseModel):
@@ -59,10 +57,17 @@ class MoveRequest(BaseModel):
     direction: str  # "up", "down", "left", "right"
 
 
+class PlayerPosition(BaseModel):
+    """Player position update from external service."""
+    x: int
+    y: int
+    type: str  # 'human' or 'ai'
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifespan."""
-    global db_pool, broadcast_task
+    global db_pool
 
     # Startup: Create database connection pool
     db_pool = await asyncpg.create_pool(
@@ -81,21 +86,9 @@ async def lifespan(app: FastAPI):
         await conn.execute("DELETE FROM player")
     print("Cleared player table")
 
-    # Start background task to broadcast player positions
-    broadcast_task = asyncio.create_task(broadcast_all_players())
-    print("Started player position broadcast task")
-
     yield
 
-    # Shutdown: Cancel broadcast task and close database pool
-    if broadcast_task:
-        broadcast_task.cancel()
-        try:
-            await broadcast_task
-        except asyncio.CancelledError:
-            pass
-        print("Stopped player position broadcast task")
-
+    # Shutdown: Close database pool
     if db_pool:
         await db_pool.close()
         print("Database pool closed")
@@ -125,8 +118,8 @@ async def get_players():
         raise HTTPException(status_code=500, detail="Database not connected")
 
     async with db_pool.acquire() as conn:
-        rows = await conn.fetch("SELECT id, x, y FROM player ORDER BY id")
-        return [Player(id=row["id"], x=row["x"], y=row["y"]) for row in rows]
+        rows = await conn.fetch("SELECT id, x, y, type FROM player ORDER BY id")
+        return [Player(id=row["id"], x=row["x"], y=row["y"], type=row["type"]) for row in rows]
 
 
 @app.get("/api/players/{player_id}", response_model=Player)
@@ -136,10 +129,10 @@ async def get_player(player_id: str):
         raise HTTPException(status_code=500, detail="Database not connected")
 
     async with db_pool.acquire() as conn:
-        row = await conn.fetchrow("SELECT id, x, y FROM player WHERE id = $1", player_id)
+        row = await conn.fetchrow("SELECT id, x, y, type FROM player WHERE id = $1", player_id)
         if not row:
             raise HTTPException(status_code=404, detail="Player not found")
-        return Player(id=row["id"], x=row["x"], y=row["y"])
+        return Player(id=row["id"], x=row["x"], y=row["y"], type=row["type"])
 
 
 @app.post("/api/players", response_model=Player)
@@ -164,12 +157,12 @@ async def create_player(player: PlayerCreate):
         except asyncpg.UniqueViolationError:
             raise HTTPException(status_code=400, detail="Player ID already exists")
 
-    new_player = Player(id=player.id, x=x, y=y)
+    new_player = Player(id=player.id, x=x, y=y, type='human')
 
     # Broadcast player joined
     await broadcast_update({
         "type": "player_joined",
-        "player": new_player.dict()
+        "player": new_player.model_dump()
     })
 
     return new_player
@@ -201,13 +194,13 @@ async def move_player(player_id: str, move: MoveRequest):
     if not db_pool:
         raise HTTPException(status_code=500, detail="Database not connected")
 
-    # Get current position
+    # Get current position and type
     async with db_pool.acquire() as conn:
-        row = await conn.fetchrow("SELECT x, y FROM player WHERE id = $1", player_id)
+        row = await conn.fetchrow("SELECT x, y, type FROM player WHERE id = $1", player_id)
         if not row:
             raise HTTPException(status_code=404, detail="Player not found")
 
-        current_x, current_y = row["x"], row["y"]
+        current_x, current_y, player_type = row["x"], row["y"], row["type"]
 
     # Calculate new position
     new_x, new_y = current_x, current_y
@@ -233,12 +226,12 @@ async def move_player(player_id: str, move: MoveRequest):
             new_x, new_y, player_id
         )
 
-    updated_player = Player(id=player_id, x=new_x, y=new_y)
+    updated_player = Player(id=player_id, x=new_x, y=new_y, type=player_type)
 
     # Broadcast player moved
     await broadcast_update({
         "type": "player_moved",
-        "player": updated_player.dict()
+        "player": updated_player.model_dump()
     })
 
     return updated_player
@@ -254,23 +247,37 @@ async def get_map_info():
     }
 
 
-async def broadcast_all_players():
-    """Periodically broadcast all player positions (including terminators)."""
-    while True:
-        await asyncio.sleep(0.5)  # Broadcast every 500ms
-        if db_pool and websocket_connections:
-            try:
-                async with db_pool.acquire() as conn:
-                    rows = await conn.fetch("SELECT id, x, y FROM player ORDER BY id")
-                    players = [Player(id=row["id"], x=row["x"], y=row["y"]).dict() for row in rows]
+# @app.put("/api/webhook/{player_id}")
+# async def player_position_changed(player_id: str, position: PlayerPosition):
+#     """
+#     Receive player position update from external service (e.g., Drasi).
+#     This endpoint does not modify the database - it only broadcasts to WebSocket clients.
+#     """
+#     # Broadcast player moved
+#     await broadcast_update({
+#         "type": "player_moved",
+#         "player": {
+#             "id": player_id,
+#             "x": position.x,
+#             "y": position.y,
+#             "type": position.type
+#         }
+#     })
+#     return {"message": "Position update broadcasted"}
 
-                    # Broadcast to all connected clients
-                    await broadcast_update({
-                        "type": "state_update",
-                        "players": players
-                    })
-            except Exception as e:
-                print(f"Error broadcasting player positions: {e}")
+
+# @app.delete("/api/webhook/{player_id}")
+# async def player_removed(player_id: str):
+#     """
+#     Receive player removal notification from external service (e.g., Drasi).
+#     This endpoint does not modify the database - it only broadcasts to WebSocket clients.
+#     """
+#     # Broadcast player left
+#     await broadcast_update({
+#         "type": "player_left",
+#         "player_id": player_id
+#     })
+#     return {"message": "Player removal broadcasted"}
 
 
 @app.websocket("/ws")
@@ -283,8 +290,8 @@ async def websocket_endpoint(websocket: WebSocket):
         # Send initial state
         if db_pool:
             async with db_pool.acquire() as conn:
-                rows = await conn.fetch("SELECT id, x, y FROM player")
-                players = [Player(id=row["id"], x=row["x"], y=row["y"]).dict() for row in rows]
+                rows = await conn.fetch("SELECT id, x, y, type FROM player")
+                players = [Player(id=row["id"], x=row["x"], y=row["y"], type=row["type"]).model_dump() for row in rows]
                 await websocket.send_json({
                     "type": "initial_state",
                     "players": players

@@ -9,8 +9,6 @@ spec:
       added:
         template: |
           {
-            "player": "{{after.id}}",
-            "x": "{{after.x}}",
-            "y": "{{after.y}}",
             "description": "Player {{after.id}} was idle at position ({{after.x}}, {{after.y}})"
           }
+---

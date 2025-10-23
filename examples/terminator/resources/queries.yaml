@@ -15,3 +15,41 @@ spec:
       p.id,
       p.x,
       p.y
+
+---
+
+apiVersion: v1
+kind: ContinuousQuery
+name: idle-players
+spec:
+  mode: query
+  sources:
+    subscriptions:
+      - id: game
+  query: >
+    MATCH
+      (p:player { type: 'human' })
+    WHERE drasi.trueLater(drasi.changeDateTime(p) <= (datetime.realtime() - duration( { seconds: 5 } )), drasi.changeDateTime(p) + duration( { seconds: 5 } ))
+
+    RETURN
+      p.id,
+      p.x,
+      p.y
+
+---
+apiVersion: v1
+kind: ContinuousQuery
+name: all-positions
+spec:
+  mode: query
+  sources:
+    subscriptions:
+      - id: game
+  query: >
+    MATCH
+      (p:player)
+    RETURN
+      p.id,
+      p.x,
+      p.y,
+      p.type
