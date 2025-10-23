@@ -1,0 +1,30 @@
+kind: Reaction
+apiVersion: v1
+name: chat-mcp
+spec:
+  kind: MCP
+  queries:
+    freezers-overheat: |
+      description: "Freezer temperature alert for when it goes above 32 degrees for more than 10 seconds"
+      added:
+        template: |
+          {
+            "freezerId": "{{after.id}}",
+            "temperature": "{{after.temp}}",
+            "description": "Temperature of freezer {{after.id}} exceeded threshold for more than 10 seconds"
+          }
+      updated:
+        template: |
+          {
+            "freezerId": "{{after.id}}",
+            "previousTemperature": "{{before.temp}}",
+            "currentTemperature": "{{after.temp}}",
+            "description": "Temperature of freezer {{after.id}} changed from {{before.temp}} to {{after.temp}}"
+          }
+      deleted:
+        template: |
+          {
+            "freezerId": "{{before.id}}",
+            "temperature": "{{before.temp}}",
+            "description": "Temperature of freezer {{before.id}} below threshold"
+          }

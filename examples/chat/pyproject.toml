@@ -1,0 +1,23 @@
+[project]
+name = "chat-example"
+version = "0.1.0"
+description = "Interactive chat examples demonstrating LangChain and LangGraph ReAct agents with Drasi continuous queries"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "python-dotenv>=1.0.0",
+    "langchain>=0.3.0,<1.0.0",
+    "langchain-openai>=0.2.0,<1.0.0",
+    "langchain-core>=0.3.0,<1.0.0",
+    "langchain-community>=0.3.0,<1.0.0",
+    "langgraph>=0.2.0,<1.0.0",
+    "langchainhub>=0.1.0",
+    "pydantic>=2.0.0",
+    "mcp[ws]>=1.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+]

@@ -15,10 +15,11 @@ This example showcases:
 ## Prerequisites
 
 1. **Python 3.11+**
-2. **[uv](https://docs.astral.sh/uv/)** - Fast Python package manager
-3. **PostgreSQL** database with game schema (see `init_db.sql`)
-4. **Drasi MCP server** configured with PostgreSQL source
-5. **Azure OpenAI** API access
+1. **[uv](https://docs.astral.sh/uv/)** - Fast Python package manager
+1. **PostgreSQL** database with game schema (see `init_db.sql`), 
+    - `wal_level` must be set to `logical` in `postgresql.conf`
+1. **Drasi** running in Docker Desktop
+1. **Azure OpenAI** API access
 
 ## Quick Start
 
@@ -27,19 +28,19 @@ This example showcases:
 cd examples/terminator
 uv sync
 
-# 2. Configure environment
-cp .env.example .env
-# Edit .env with your Drasi server URL, database, and Azure OpenAI credentials
+# 2. Initialize database
+psql -h localhost -p 5432 -U postgres -d game -f init_db.sql
 
-# 3. Initialize database
-psql -d game -f init_db.sql
-
-# 4. Configure Drasi resources
+# 3. Configure Drasi resources
 drasi apply -f resources/sources.yaml
 drasi apply -f resources/queries.yaml
 drasi apply -f resources/reaction.yaml
 
 drasi tunnel reaction terminator-mcp 8083
+
+# 4. Configure environment
+cp .env.example .env
+# Edit .env with your Drasi server URL, database, and Azure OpenAI credentials
 
 # 5. Run backend (terminal 1)
 make backend

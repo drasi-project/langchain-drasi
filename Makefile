@@ -22,14 +22,13 @@ help:
 	@echo "  publish          - Publish to PyPI"
 
 install:
-	uv pip install -e .
+	uv sync --no-dev
 
 dev-install:
-	uv pip install -e ".[dev]"
+	uv sync
 
 update:
-	uv pip compile pyproject.toml -o requirements.txt
-	uv pip install -r requirements.txt
+	uv lock --upgrade
 
 build: clean
 	uv build

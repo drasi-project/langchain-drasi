@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ContinuousQuery
+name: freezers-overheat
+spec:
+  mode: query
+  sources:    
+    subscriptions:
+      - id: demo
+  query: > 
+    MATCH 
+      (f:Freezer)
+    WHERE drasi.trueFor(f.temp > 32, duration( { seconds: 10 } ))
+    RETURN
+      f.id AS id,
+      f.temp AS temp

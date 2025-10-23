@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Source
+name: demo
+spec:
+  kind: PostgreSQL  
+  properties:
+    host: host.docker.internal
+    port: 5432
+    user: postgres
+    password: test
+    database: demo
+    ssl: true
+    tables:
+      - public.Freezer
