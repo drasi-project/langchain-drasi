@@ -109,7 +109,7 @@ The agent uses a custom LangGraph workflow that integrates the Drasi tool:
 from langgraph.graph import StateGraph
 from langgraph.prebuilt import ToolNode
 
-workflow = StateGraph(HuntingState)
+workflow = StateGraph(TerminatorState)
 
 # Add nodes
 workflow.add_node("setup_queries_call_model", call_model_node)
@@ -166,7 +166,7 @@ stateDiagram-v2
 The agent uses the drasi_tool during setup to discover and subscribe to queries:
 
 ```python
-async def call_model_node(state: HuntingState) -> HuntingState:
+async def call_model_node(state: TerminatorState) -> TerminatorState:
     """Call LLM with Drasi tool access."""
     response = await llm.bind_tools([drasi_tool]).ainvoke(state["messages"])
     return {"messages": [response]}
@@ -188,7 +188,7 @@ The LLM then makes tool calls like:
 The workflow continuously checks the `SensorHandler` for new notifications:
 
 ```python
-async def check_sensors(state: HuntingState) -> HuntingState:
+async def check_sensors(state: TerminatorState) -> TerminatorState:
     """Check for new Drasi notifications."""
     await asyncio.sleep(0.5)  # Brief wait
 

@@ -7,7 +7,7 @@ from langchain_openai import AzureChatOpenAI
 from langchain_drasi import create_drasi_tool, MCPConnectionConfig
 
 from .sensor import SensorHandler
-from .workflow import build_hunting_workflow, HuntingState
+from .workflow import build_hunting_workflow, TerminatorState
 
 
 class TerminatorAgent:
@@ -45,8 +45,6 @@ class TerminatorAgent:
         )
 
         self.initialized = False
-        self.current_path: list[tuple[int, int]] = []
-        self.current_target: str | None = None
 
         # Build hunting workflow
         self.hunting_workflow = build_hunting_workflow(self, self.drasi_tool)
@@ -118,11 +116,11 @@ class TerminatorAgent:
     async def run(self) -> None:
         """Run the terminator continuously with the hunting workflow."""
         # Create initial state
-        initial_state: HuntingState = {
+        initial_state: TerminatorState = {
             "messages": [],
             "current_position": (self.x, self.y),
             "path": [],
-            "current_target": self.current_target,
+            "current_target": None,
             "reevaluate_plan": False,
             "sensor_log": [],
             "known_targets": [],
