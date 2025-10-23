@@ -19,30 +19,34 @@ pip install langchain-drasi
 
 ### Development Installation
 
+This project uses [uv](https://docs.astral.sh/uv/) for fast dependency management.
+
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/langchain-drasi.git
+git clone https://github.com/drasi-project/langchain-drasi.git
 cd langchain-drasi
 
 # Install with development dependencies
-pip install -e ".[dev]"
+uv sync
+
+# Or install without dev dependencies
+make install
 ```
 
 ## Quick Start
 
 ```python
-from langchain_drasi import create_drasi_tool, MCPConnectionConfig
-from langchain_drasi.handlers import ConsoleHandler
+from langchain_drasi import create_drasi_tool, MCPConnectionConfig, ConsoleHandler
 
 # Configure HTTP connection to remote Drasi MCP server
 config = MCPConnectionConfig(
-    server_url="https://your-drasi-server.com/api",
+    server_url="http://localhost:8083",  # Default Drasi MCP server URL
     headers={"Authorization": "Bearer your-token"},  # Optional authentication
     timeout=30.0
 )
 
 # Create notification handler
-handler = ConsoleHandler(include_timestamp=True, pretty_print=True)
+handler = ConsoleHandler()
 
 # Create the tool
 tool = create_drasi_tool(
@@ -50,17 +54,23 @@ tool = create_drasi_tool(
     notification_handlers=[handler]
 )
 
-# Use with LangChain agents
+# Use with LangChain agents (requires langchain <1.0)
+from langchain import hub
 from langchain.agents import AgentExecutor, create_react_agent
-from langchain_openai import ChatOpenAI
+from langchain_openai import AzureChatOpenAI
 
-llm = ChatOpenAI()
+llm = AzureChatOpenAI(
+    azure_deployment="gpt-4o-mini",
+    temperature=0
+)
+
+prompt = hub.pull("hwchase17/react-chat")
 agent = create_react_agent(llm, [tool], prompt)
 agent_executor = AgentExecutor(agent=agent, tools=[tool])
 
 # Agent can now discover and read Drasi queries
 result = await agent_executor.ainvoke({
-    "input": "What active orders are there?"
+    "input": "What queries are available?"
 })
 ```
 
@@ -89,17 +99,19 @@ result = await tool.read_query("active-orders")
 Subscribe to query updates and handle changes:
 
 ```python
-await tool.subscribe("freezerx")
+await tool.subscribe("hot-freezers")
 # Notifications routed to registered handlers
 ```
 
 ### 🎯 Built-in Handlers
 
-Three ready-to-use notification handlers:
+Five ready-to-use notification handlers:
 
+- **ConsoleHandler**: Prints notifications to stdout with formatting
 - **LoggingHandler**: Logs notifications using Python logging
-- **ConsoleHandler**: Prints notifications to stdout
 - **MemoryHandler**: Stores notifications in memory for analysis
+- **LangChainMemoryHandler**: Automatically injects notifications into LangChain conversation memory
+- **LangGraphMemoryHandler**: Automatically injects notifications into LangGraph checkpoints
 
 ### 🛠️ Custom Handlers
 
@@ -147,8 +159,23 @@ class MyHandler(BaseDrasiNotificationHandler):
 
 See the [examples/](examples/) directory for complete working examples:
 
-- **vanilla_langchain.py**: Basic ReAct agent with Drasi
-- **langgraph_example.py**: Stateful LangGraph workflow with Drasi
+### Chat Examples ([examples/chat/](examples/chat/))
+
+Interactive ReAct agents demonstrating automatic notification memory:
+- **langchain_react.py**: LangChain ReAct agent with `LangChainMemoryHandler`
+- **langgraph_react.py**: LangGraph ReAct agent with `LangGraphMemoryHandler`
+- **Use case**: Freezer temperature monitoring with real-time alerts
+
+### Terminator Game ([examples/terminator/](examples/terminator/))
+
+Complex LangGraph agent demonstrating custom workflows and notification handling:
+- **Custom LangGraph state machine** that integrates Drasi tool
+- **Custom `SensorHandler`** for processing real-time player positions
+- **Use case**: AI agent hunts players using Drasi continuous queries
+
+### Simple Example ([examples/simple_example.py](examples/simple_example.py))
+
+Basic usage demonstrating core functionality
 
 ## API Reference
 
@@ -191,12 +218,17 @@ handler = LoggingHandler(
 
 #### `ConsoleHandler`
 
-Prints notifications to console.
+Prints notifications to console with formatted output.
 
 ```python
-handler = ConsoleHandler(
-    include_timestamp=True,
-    pretty_print=True
+from langchain_drasi import ConsoleHandler
+
+handler = ConsoleHandler()
+
+# Use with create_drasi_tool
+tool = create_drasi_tool(
+    mcp_config=config,
+    notification_handlers=[handler]
 )
 ```
 
@@ -205,6 +237,8 @@ handler = ConsoleHandler(
 Stores notifications in memory.
 
 ```python
+from langchain_drasi import MemoryHandler
+
 handler = MemoryHandler(max_size=100)
 
 # Retrieve notifications
@@ -213,54 +247,114 @@ freezer_notifs = handler.get_by_query("freezerx")
 added_events = handler.get_by_type("added")
 ```
 
+#### `LangChainMemoryHandler`
+
+Automatically injects notifications into LangChain conversation memory as system messages.
+
+```python
+from langchain.memory import ConversationBufferMemory
+from langchain_drasi import LangChainMemoryHandler
+
+memory = ConversationBufferMemory(
+    memory_key="chat_history",
+    input_key="input",
+    output_key="output",
+)
+
+handler = LangChainMemoryHandler(memory)
+
+# Notifications are automatically added to conversation memory
+tool = create_drasi_tool(
+    mcp_config=config,
+    notification_handlers=[handler]
+)
+```
+
+See [examples/chat/langchain_react.py](examples/chat/langchain_react.py) for a complete example.
+
+#### `LangGraphMemoryHandler`
+
+Automatically injects notifications into LangGraph checkpoints as system messages.
+
+```python
+from langgraph.checkpoint.memory import MemorySaver
+from langchain_drasi import LangGraphMemoryHandler
+
+memory = MemorySaver()
+thread_id = "my-conversation"
+
+handler = LangGraphMemoryHandler(memory, thread_id)
+
+# Create agent with wrapped checkpointer
+from langgraph.prebuilt import create_react_agent
+
+agent = create_react_agent(
+    model=llm,
+    tools=[drasi_tool],
+    checkpointer=handler.checkpointer,  # Use wrapped checkpointer
+)
+```
+
+See [examples/chat/langgraph_react.py](examples/chat/langgraph_react.py) for a complete example.
+
 ## Development
 
 ### Running Tests
 
 ```bash
-# Run all tests
-pytest
+# Run all tests (including integration)
+make test
+
+# Run tests excluding integration tests
+make test-fast
+
+# Run unit tests only
+make test-unit
+
+# Run integration tests only
+make test-integration
 
 # Run contract tests only
-pytest tests/contract/
-
-# Run with coverage
-pytest --cov=langchain_drasi --cov-report=html
+make test-contract
 ```
 
 ### Code Quality
 
 ```bash
 # Format code
-black src/ tests/
+make format
 
-# Lint
-ruff check src/ tests/
+# Run linting checks (ruff + mypy + pyright)
+make lint
 
-# Type check
-mypy src/
+# Run type checking only
+make typecheck
 ```
+
+### Available Make Targets
+
+Run `make help` to see all available commands.
 
 ## Requirements
 
 - Python 3.11+
-- LangChain Core 0.1.0+
-- MCP SDK 1.0.0+
-- Pydantic 2.0.0+
+- LangChain Core >=0.1.0
+- LangGraph >=0.1.0
+- MCP SDK >=1.0.0
+- Pydantic >=2.0.0
+
+**Note**: Examples using LangChain's legacy APIs (agents, memory, hub) require LangChain <1.0. For LangChain 1.0+, use LangGraph-based workflows.
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) file for details.
-
-## Contributing
-
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Apache License 2.0 - see [LICENSE](LICENSE) file for details.
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/your-org/langchain-drasi/issues)
-- **Documentation**: [Full docs](https://your-org.github.io/langchain-drasi/)
-- **Discussions**: [GitHub Discussions](https://github.com/your-org/langchain-drasi/discussions)
+- **Issues**: [GitHub Issues](https://github.com/drasi-project/langchain-drasi/issues)
+- **Drasi Documentation**: [drasi.io](https://drasi.io/)
+- **LangChain Documentation**: [python.langchain.com](https://python.langchain.com/)
+- **LangGraph Documentation**: [langchain-ai.github.io/langgraph](https://langchain-ai.github.io/langgraph/)
 
 ## Acknowledgments
 
