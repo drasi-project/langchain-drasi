@@ -92,7 +92,7 @@ class DrasiTool(BaseTool):
         "Input format: 'operation:query_name' or just 'operation'. "
         "Use 'discover' to list all queries, 'read:query-name' to get results, "
         "'subscribe:query-name' for real-time updates, 'unsubscribe:query-name' to stop. "
-        "Examples: 'discover', 'read:active-orders', 'subscribe:freezerx'"
+        "Examples: 'discover', 'read:active-orders', 'subscribe:query1'"
     )
     args_schema: type[BaseModel] = DrasiQueryInput  # type: ignore[assignment]
 
