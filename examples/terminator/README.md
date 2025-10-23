@@ -37,6 +37,9 @@ psql -d game -f init_db.sql
 # 4. Configure Drasi resources
 drasi apply -f resources/sources.yaml
 drasi apply -f resources/queries.yaml
+drasi apply -f resources/reaction.yaml
+
+drasi tunnel reaction terminator-mcp 8083
 
 # 5. Run backend (terminal 1)
 make backend
