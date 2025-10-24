@@ -69,8 +69,19 @@ def check_sensors_node(agent):
             await asyncio.sleep(0.2)
         else:
             await asyncio.sleep(0.8)
-        if agent.sensor_handler.has_new_notifications():
-            new_logs = [json.dumps(m) for m in agent.sensor_handler.get_new_notifications()]
+        if not agent.buffer_handler.is_empty():
+            # Consume all notifications and convert to JSON strings
+            new_logs = []
+            while not agent.buffer_handler.is_empty():
+                record = agent.buffer_handler.consume()
+                if record:
+                    notification_dict = {
+                        "type": record.change_type,
+                        "query": record.query_name,
+                        "data": record.data,
+                        "timestamp": record.timestamp.timestamp()
+                    }
+                    new_logs.append(json.dumps(notification_dict))
             return {"reevaluate_plan": True, "sensor_log": [*state["sensor_log"], *new_logs]}
 
         return state
@@ -195,8 +206,8 @@ def execute_move_node(agent):
                 updated_targets = [t for t in known_targets if t["player_id"] != current_target]
                 print(f"[{agent.agent_id}] Removed {current_target} from targets, {len(updated_targets)} remaining")
 
-                # Log to sensor for LLM context
-                agent.sensor_handler.custom_log(f"Reached target position for {current_target} at ({next_x},{next_y})")
+                # Log to buffer for LLM context
+                agent.custom_log(f"Reached target position for {current_target} at ({next_x},{next_y})")
 
                 # Clear current target and trigger fresh evaluation
                 return {

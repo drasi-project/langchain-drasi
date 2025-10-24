@@ -4,9 +4,8 @@ import os
 import httpx
 from langchain_openai import AzureChatOpenAI
 
-from langchain_drasi import create_drasi_tool, MCPConnectionConfig
+from langchain_drasi import create_drasi_tool, MCPConnectionConfig, BufferHandler, ConsoleHandler
 
-from .sensor import SensorHandler
 from .workflow import build_hunting_workflow, TerminatorState
 
 
@@ -26,8 +25,9 @@ class TerminatorAgent:
         self.x, self.y = 0, 0  # Will be set by initialize()
         self.llm = llm
 
-        # Create Drasi notification handler
-        self.sensor_handler = SensorHandler(agent_id)
+        # Create Drasi notification handlers
+        self.buffer_handler = BufferHandler()
+        self.console_handler = ConsoleHandler()
 
         # Configure Drasi connection
         mcp_config = MCPConnectionConfig(
@@ -38,10 +38,10 @@ class TerminatorAgent:
             timeout=30.0,
         )
 
-        # Create Drasi tool with notification handler
+        # Create Drasi tool with notification handlers
         self.drasi_tool = create_drasi_tool(
             mcp_config=mcp_config,
-            notification_handlers=[self.sensor_handler],
+            notification_handlers=[self.buffer_handler, self.console_handler],
         )
 
         self.initialized = False
@@ -75,6 +75,31 @@ class TerminatorAgent:
 
         print(f"[{self.agent_id}] Query subscriptions will be set up by workflow")
 
+    def custom_log(self, message: str) -> None:
+        """Add a custom log message to the notification buffer.
+
+        This allows the agent to add informational messages that will be
+        processed by the LLM alongside actual Drasi notifications.
+
+        Args:
+            message: The log message to add
+        """
+        from langchain_drasi.handlers.memory_handler import NotificationRecord
+        import time
+
+        print(f"[{self.agent_id}] [Custom Log] {message}")
+
+        # Create a custom notification record
+        record = NotificationRecord(
+            query_name="agent_log",
+            change_type="custom",
+            data={"message": message},
+            timestamp=None  # Will use current time
+        )
+
+        # Add directly to buffer
+        self.buffer_handler._add_record(record)
+
     async def _move_to(self, new_x: int, new_y: int) -> None:
         """Move to a new position. Collisions are detected by the server."""
         # Calculate direction from current position to new position
@@ -104,8 +129,8 @@ class TerminatorAgent:
                 eliminated = move_data.get("eliminated_players", [])
                 for player_id in eliminated:
                     print(f"[{self.agent_id}] ⚡ ELIMINATED player '{player_id}' at ({self.x},{self.y})!")
-                    # Log to sensor so LLM knows this area is now clear
-                    self.sensor_handler.custom_log(f"Successfully eliminated player {player_id} at position ({self.x},{self.y})")
+                    # Log to buffer so LLM knows this area is now clear
+                    self.custom_log(f"Successfully eliminated player {player_id} at position ({self.x},{self.y})")
             except httpx.HTTPStatusError as e:
                 if e.response.status_code == 404:
                     print(f"[{self.agent_id}] ⚠ Player not found, may have been eliminated")
