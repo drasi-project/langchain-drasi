@@ -8,7 +8,9 @@ This example demonstrates how to build reactive AI agents that respond to real-t
 
 This example showcases:
 - **Custom LangGraph workflow** that integrates with the Drasi tool
-- **SensorHandler** - Custom notification handler for Drasi query results
+- **BufferHandler** - Built-in notification handler for buffering Drasi query results to be consumed by the workflow
+- **ConsoleHandler** - Built-in notification handler for printing updates
+- **State reducers** - Automatic trimming of sensor logs to prevent unbounded growth
 - **Real-time reactive behavior** - Agent responds immediately to database changes
 - **Query discovery and subscription** - Agent uses LLM to discover and subscribe to relevant queries
 
@@ -55,36 +57,31 @@ make terminator
 
 The terminator agent demonstrates the core langchain-drasi integration pattern:
 
-#### 1. Create a Custom Notification Handler
+#### 1. Use Built-in Notification Handlers
 
-The `SensorHandler` extends `BaseDrasiNotificationHandler` to receive real-time query results:
+The agent uses two built-in handlers from `langchain-drasi`:
 
 ```python
-from langchain_drasi.callbacks import BaseDrasiNotificationHandler
+from langchain_drasi import BufferHandler, ConsoleHandler
 
-class SensorHandler(BaseDrasiNotificationHandler):
-    def __init__(self, agent_id: str):
-        self.agent_id = agent_id
-        self.notification_queue = Queue()
+# BufferHandler: Queues notifications for sequential processing
+buffer_handler = BufferHandler()
 
-    def on_result_added(self, query_name: str, added_data: dict[str, Any]) -> None:
-        """Called when Drasi detects a new result in a subscribed query."""
-        notification = {
-            "type": "added",
-            "query": query_name,
-            "data": added_data,
-            "timestamp": time.time()
-        }
-        self.notification_queue.put(notification)
-
-    def on_result_updated(self, query_name: str, updated_data: dict[str, Any]) -> None:
-        """Called when a result changes."""
-        # Handle updates...
-
-    def on_result_deleted(self, query_name: str, deleted_data: dict[str, Any]) -> None:
-        """Called when a result is removed."""
-        # Handle deletions...
+# ConsoleHandler: Prints notifications to stdout
+console_handler = ConsoleHandler()
 ```
+
+**BufferHandler** provides:
+- `consume()` - Pop and return the next notification
+- `is_empty()` - Check if buffer has notifications
+- `peek()` - View next notification without consuming
+- `size()` - Get current buffer size
+
+Notifications are stored as `NotificationRecord` objects with:
+- `query_name` - Name of the Drasi query
+- `change_type` - Type of change (added/updated/deleted)
+- `data` - The notification data
+- `timestamp` - When notification was received
 
 #### 2. Configure Drasi Connection
 
@@ -98,14 +95,38 @@ mcp_config = MCPConnectionConfig(
     timeout=30.0,
 )
 
-# Create the Drasi tool with your notification handler
+# Create the Drasi tool with both notification handlers
 drasi_tool = create_drasi_tool(
     mcp_config=mcp_config,
-    notification_handlers=[sensor_handler],
+    notification_handlers=[buffer_handler, console_handler],
 )
 ```
 
-#### 3. Build LangGraph Workflow with Drasi Tool
+#### 3. Define State with Reducers
+
+The workflow state uses a reducer to automatically manage sensor log size:
+
+```python
+from typing import Annotated
+from langgraph.graph import MessagesState
+
+def sensor_log_reducer(existing: list[str], new: list[str]) -> list[str]:
+    """Keeps only the most recent 100 sensor logs."""
+    combined = existing + new
+    return combined[-100:]  # Automatic trimming
+
+class TerminatorState(MessagesState):
+    current_position: tuple[int, int]
+    path: list[tuple[int, int]]
+    current_target: str | None
+    reevaluate_plan: bool
+    sensor_log: Annotated[list[str], sensor_log_reducer]  # Auto-trimmed
+    known_targets: list[dict]
+```
+
+The `sensor_log_reducer` ensures the agent doesn't accumulate unbounded history, keeping only the 100 most recent notifications.
+
+#### 4. Build LangGraph Workflow with Drasi Tool
 
 The agent uses a custom LangGraph workflow that integrates the Drasi tool:
 
@@ -157,7 +178,7 @@ stateDiagram-v2
    - This phase loops until the LLM has discovered and subscribed to all relevant queries
 
 2. **Main Hunting Loop (Continuous)**
-   - **check_sensors** - Checks `SensorHandler` for new Drasi notifications
+   - **check_sensors** - Checks `BufferHandler` for new Drasi notifications
    - **evaluate_targets** - Uses LLM to parse sensor data and extract target positions
    - **select_and_plan** - Selects closest target and plans path (code-based, no LLM)
    - **execute_move** - Executes the next move via game API
@@ -187,27 +208,44 @@ The LLM then makes tool calls like:
 - `drasi_query(operation="discover")` - Returns list of available queries
 - `drasi_query(operation="subscribe", query_name="all_players")` - Subscribes to a query
 
-#### Checking Sensors for Notifications
+#### Checking Buffer for Notifications
 
-The workflow continuously checks the `SensorHandler` for new notifications:
+The workflow continuously checks the `BufferHandler` for new notifications:
 
 ```python
 async def check_sensors(state: TerminatorState) -> TerminatorState:
     """Check for new Drasi notifications."""
     await asyncio.sleep(0.5)  # Brief wait
 
-    if sensor_handler.has_new_notifications():
-        new_notifications = sensor_handler.get_new_notifications()
-        # Add to sensor log and trigger re-evaluation
+    if not agent.buffer_handler.is_empty():
+        # Consume all notifications from buffer
+        new_logs = []
+        while not agent.buffer_handler.is_empty():
+            record = agent.buffer_handler.consume()
+            if record:
+                notification_dict = {
+                    "type": record.change_type,
+                    "query": record.query_name,
+                    "data": record.data,
+                    "timestamp": record.timestamp.timestamp()
+                }
+                new_logs.append(json.dumps(notification_dict))
+
+        # Return just new logs - reducer handles merging and trimming to 100
         return {
             "reevaluate_plan": True,
-            "sensor_log": [*state["sensor_log"], *new_notifications]
+            "sensor_log": new_logs
         }
 
     return state
 ```
 
-When new notifications arrive, the workflow triggers the `evaluate_targets` node where the LLM parses the sensor data to extract player positions.
+**Key Points:**
+- Uses `buffer_handler.is_empty()` to check for notifications
+- Calls `buffer_handler.consume()` to pop notifications from the queue
+- Converts `NotificationRecord` objects to JSON strings
+- Returns only new logs - the `sensor_log_reducer` automatically merges and trims
+- When new notifications arrive, triggers the `evaluate_targets` node where the LLM parses sensor data
 
 ### File Structure
 
@@ -215,20 +253,22 @@ When new notifications arrive, the workflow triggers the `evaluate_targets` node
 examples/terminator/
 ├── agent/
 │   ├── terminator.py      # Main TerminatorAgent class with Drasi integration
-│   ├── workflow.py        # LangGraph workflow state machine
-│   ├── sensor.py          # SensorHandler notification handler
-│   └── pathfinding.py     # BFS pathfinding utilities
+│   ├── workflow.py        # LangGraph workflow state machine with reducers
+│   ├── pathfinding.py     # BFS pathfinding utilities
+│   └── llm_helpers.py     # LLM prompt building and parsing utilities
 ├── terminator.py          # Entry point
 ├── backend.py             # Game backend (FastAPI + PostgreSQL)
+├── game_map.py            # Game map utilities
 └── resources/
     ├── sources.yaml       # Drasi PostgreSQL source config
-    └── queries.yaml       # Drasi continuous query definitions
+    ├── queries.yaml       # Drasi continuous query definitions
+    └── reaction.yaml      # Drasi MCP reaction configuration
 ```
 
 **Focus on these files for langchain-drasi integration:**
-- **`agent/terminator.py`** - Shows how to create and configure the Drasi tool
-- **`agent/sensor.py`** - Custom `BaseDrasiNotificationHandler` implementation
-- **`agent/workflow.py`** - LangGraph workflow that uses the Drasi tool and checks sensors
+- **`agent/terminator.py`** - Shows how to create and configure the Drasi tool with built-in handlers
+- **`agent/workflow.py`** - LangGraph workflow that uses BufferHandler, state reducers, and the Drasi tool
+- **`backend.py`** - Game backend that generates database changes for Drasi to detect
 
 ## Key Concepts
 
@@ -238,8 +278,15 @@ This example demonstrates a **reactive agent pattern** where:
 
 1. **Agent subscribes to queries** - Uses LLM + drasi_tool to discover and subscribe
 2. **Drasi pushes notifications** - When database changes match query conditions
-3. **Agent reacts immediately** - SensorHandler receives notifications, workflow re-evaluates
+3. **Agent reacts immediately** - BufferHandler queues notifications, workflow consumes and re-evaluates
 4. **No polling required** - Agent is notified of changes in real-time
+5. **Automatic history management** - State reducer keeps only the 100 most recent notifications
+
+**Key Benefits:**
+- **Built-in handlers** - No custom notification handler code needed
+- **Sequential processing** - BufferHandler ensures FIFO consumption of notifications
+- **Memory safety** - State reducer prevents unbounded history growth
+- **Separation of concerns** - BufferHandler manages queue, ConsoleHandler manages logging
 
 This is more efficient than traditional polling approaches and enables truly reactive AI agents.
 
