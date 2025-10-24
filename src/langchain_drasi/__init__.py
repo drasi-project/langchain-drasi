@@ -63,7 +63,7 @@ from .exceptions import (
 )
 
 # Built-in handlers
-from .handlers import ConsoleHandler, LangChainMemoryHandler, LangGraphMemoryHandler, LoggingHandler, MemoryHandler
+from .handlers import BufferHandler, ConsoleHandler, LangChainMemoryHandler, LangGraphMemoryHandler, LoggingHandler, MemoryHandler
 
 # Models
 from .models import ChangeNotification, ChangeType, QueryInfo, QueryResult
@@ -111,8 +111,9 @@ __all__ = [
     "validate_query_uri",
     "extract_query_name_from_notification_method",
     # Built-in Handlers
-    "LoggingHandler",
+    "BufferHandler",
     "ConsoleHandler",
+    "LoggingHandler",
     "MemoryHandler",
     "LangChainMemoryHandler",
     "LangGraphMemoryHandler",
