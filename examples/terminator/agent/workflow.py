@@ -3,6 +3,7 @@
 import asyncio
 import json
 import random
+from typing import Annotated
 
 from langchain_core.messages import HumanMessage
 from langgraph.graph import StateGraph, START, MessagesState
@@ -14,13 +15,28 @@ from .llm_helpers import parse_llm_json, build_targets_prompt
 from .pathfinding import find_path_bfs
 
 
+def sensor_log_reducer(existing: list[str], new: list[str]) -> list[str]:
+    """Reducer that keeps only the most recent 100 sensor logs.
+
+    Args:
+        existing: Current sensor logs
+        new: New sensor logs to add
+
+    Returns:
+        Combined list with only the most recent 100 entries
+    """
+    combined = existing + new
+    # Keep only the most recent 100 logs
+    return combined[-100:]
+
+
 class TerminatorState(MessagesState):
     """State for the terminator workflow."""
     current_position: tuple[int, int]
     path: list[tuple[int, int]]
     current_target: str | None
     reevaluate_plan: bool
-    sensor_log: list[str]
+    sensor_log: Annotated[list[str], sensor_log_reducer]
     known_targets: list[dict]  # List of {"player_id": str, "x": int, "y": int}
 
 
@@ -82,7 +98,8 @@ def check_sensors_node(agent):
                         "timestamp": record.timestamp.timestamp()
                     }
                     new_logs.append(json.dumps(notification_dict))
-            return {"reevaluate_plan": True, "sensor_log": [*state["sensor_log"], *new_logs]}
+            # Return just the new logs - reducer will merge and trim to 100
+            return {"reevaluate_plan": True, "sensor_log": new_logs}
 
         return state
     return node

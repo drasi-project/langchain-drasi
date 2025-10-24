@@ -85,7 +85,6 @@ class TerminatorAgent:
             message: The log message to add
         """
         from langchain_drasi.handlers.memory_handler import NotificationRecord
-        import time
 
         print(f"[{self.agent_id}] [Custom Log] {message}")
 
