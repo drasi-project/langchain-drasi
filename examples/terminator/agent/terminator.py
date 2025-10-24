@@ -97,7 +97,7 @@ class TerminatorAgent:
         )
 
         # Add directly to buffer
-        self.buffer_handler._add_record(record)
+        self.buffer_handler.push(record)
 
     async def _move_to(self, new_x: int, new_y: int) -> None:
         """Move to a new position. Collisions are detected by the server."""

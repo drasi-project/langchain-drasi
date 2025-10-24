@@ -53,7 +53,7 @@ class BufferHandler(BaseDrasiNotificationHandler):
         self.buffer: deque[NotificationRecord] = deque(maxlen=max_size)
         self.max_size = max_size
 
-    def _add_record(self, record: NotificationRecord) -> None:
+    def push(self, record: NotificationRecord) -> None:
         """Add a notification record to the buffer.
 
         If max_size is set and buffer is full, oldest notification is
@@ -72,7 +72,7 @@ class BufferHandler(BaseDrasiNotificationHandler):
             added_data: Added result data
         """
         record = NotificationRecord(query_name, "added", added_data)
-        self._add_record(record)
+        self.push(record)
 
     def on_result_updated(self, query_name: str, updated_data: dict[str, Any]) -> None:
         """Buffer result updated notification.
@@ -82,7 +82,7 @@ class BufferHandler(BaseDrasiNotificationHandler):
             updated_data: Updated result data
         """
         record = NotificationRecord(query_name, "updated", updated_data)
-        self._add_record(record)
+        self.push(record)
 
     def on_result_deleted(self, query_name: str, deleted_data: dict[str, Any]) -> None:
         """Buffer result deleted notification.
@@ -92,7 +92,7 @@ class BufferHandler(BaseDrasiNotificationHandler):
             deleted_data: Deleted result data
         """
         record = NotificationRecord(query_name, "deleted", deleted_data)
-        self._add_record(record)
+        self.push(record)
 
     def on_notification_error(self, query_name: str, error: Exception) -> None:
         """Buffer notification error.
@@ -102,7 +102,7 @@ class BufferHandler(BaseDrasiNotificationHandler):
             error: The exception that occurred
         """
         record = NotificationRecord(query_name, "error", error)
-        self._add_record(record)
+        self.push(record)
 
     def consume(self) -> NotificationRecord | None:
         """Consume and remove the next notification from the buffer.
