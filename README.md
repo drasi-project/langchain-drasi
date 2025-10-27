@@ -135,27 +135,6 @@ class MyHandler(BaseDrasiNotificationHandler):
         self.remove_from_cache(query_name, deleted_data)
 ```
 
-## Architecture
-
-### Core Components
-
-- **DrasiTool**: LangChain `BaseTool` implementation for agent integration
-- **MCPClient**: Wrapper around MCP SDK for Drasi server communication
-- **NotificationRouter**: Parses Drasi's custom notification format and routes to handlers
-- **Callback Protocols**: Type-safe interfaces for notification handling
-
-### Data Models
-
-- **QueryInfo**: Metadata about available queries
-- **QueryResult**: Query execution results
-- **ChangeNotification**: Parsed notification events
-- **ChangeType**: Enum for added/updated/deleted events
-
-### Configuration
-
-- **MCPConnectionConfig**: MCP server connection settings
-- **ReconnectPolicy**: Connection retry and backoff configuration
-
 ## Examples
 
 See the [examples/](examples/) directory for complete working examples:
@@ -171,10 +150,8 @@ Interactive ReAct agents demonstrating automatic notification memory:
 
 Complex LangGraph agent demonstrating custom workflows and notification handling:
 - **Custom LangGraph state machine** that integrates Drasi tool
-- **Custom `SensorHandler`** for processing real-time player positions
+- **BufferHandler** for processing real-time player positions
 - **Use case**: AI agent hunts players using Drasi continuous queries
-
-### Simple Example ([examples/simple_example.py](examples/simple_example.py))
 
 Basic usage demonstrating core functionality
 
@@ -250,7 +227,7 @@ added_events = handler.get_by_type("added")
 
 #### `BufferHandler`
 
-Stores notifications in a FIFO queue for sequential consumption.
+Stores notifications in a FIFO queue for sequential consumption. This is useful for buffering incoming change notifications, while your workflow may be busy on another step.
 
 ```python
 from langchain_drasi import BufferHandler
@@ -371,9 +348,7 @@ Run `make help` to see all available commands.
 
 **Note**: Examples using LangChain's legacy APIs (agents, memory, hub) require LangChain <1.0. For LangChain 1.0+, use LangGraph-based workflows.
 
-## Use Cases
-
-LangChain-Drasi enables building reactive, event-driven AI agents by bridging external systems with LangGraph workflows. Drasi continuous queries stream real-time updates that trigger agent state transitions, modify memory, or dynamically control workflow execution—transforming static agents into long-lived, responsive systems.
+## Use Case Examples
 
 ### 1. Realtime Knowledge Agents
 

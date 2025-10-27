@@ -16,18 +16,18 @@ from .pathfinding import find_path_bfs
 
 
 def sensor_log_reducer(existing: list[str], new: list[str]) -> list[str]:
-    """Reducer that keeps only the most recent 100 sensor logs.
+    """Reducer that keeps only the most recent 50 sensor logs.
 
     Args:
         existing: Current sensor logs
         new: New sensor logs to add
 
     Returns:
-        Combined list with only the most recent 100 entries
+        Combined list with only the most recent 50 entries
     """
     combined = existing + new
-    # Keep only the most recent 100 logs
-    return combined[-100:]
+    # Keep only the most recent 50 logs
+    return combined[-50:]
 
 
 class TerminatorState(MessagesState):
