@@ -1,10 +1,10 @@
 # LangChain-Drasi
 
-A LangChain extension library for integrating Drasi continuous queries into AI agent workflows via the Model Context Protocol (MCP).
+LangChain-Drasi enables building reactive, event-driven AI agents by bridging external data changes with LangGraph workflows. [Drasi](https://drasi.io/) continuous queries stream real-time updates that trigger agent state transitions, modify memory, or dynamically control workflow execution—transforming static agents into long-lived, responsive systems.
 
 ## Overview
 
-`langchain-drasi` provides a seamless way to connect LangChain agents to Drasi continuous queries, enabling AI agents to:
+`langchain-drasi` provides a seamless way to connect LangChain/LangGraph agents to [Drasi](https://drasi.io/) continuous queries, enabling AI agents to:
 
 - **Discover** available Drasi queries
 - **Read** current query results
@@ -105,11 +105,12 @@ await tool.subscribe("hot-freezers")
 
 ### 🎯 Built-in Handlers
 
-Five ready-to-use notification handlers:
+Six ready-to-use notification handlers:
 
 - **ConsoleHandler**: Prints notifications to stdout with formatting
 - **LoggingHandler**: Logs notifications using Python logging
 - **MemoryHandler**: Stores notifications in memory for analysis
+- **BufferHandler**: Stores notifications in a FIFO queue for sequential consumption
 - **LangChainMemoryHandler**: Automatically injects notifications into LangChain conversation memory
 - **LangGraphMemoryHandler**: Automatically injects notifications into LangGraph checkpoints
 
@@ -247,6 +248,33 @@ freezer_notifs = handler.get_by_query("freezerx")
 added_events = handler.get_by_type("added")
 ```
 
+#### `BufferHandler`
+
+Stores notifications in a FIFO queue for sequential consumption.
+
+```python
+from langchain_drasi import BufferHandler
+
+handler = BufferHandler(max_size=50)
+
+# Use with create_drasi_tool
+tool = create_drasi_tool(
+    mcp_config=config,
+    notification_handlers=[handler]
+)
+
+# Consume notifications one at a time
+while not handler.is_empty():
+    notification = handler.consume()
+    process_notification(notification)
+
+# Or peek without consuming
+next_notif = handler.peek()
+
+# Check buffer status
+current_size = handler.size()
+```
+
 #### `LangChainMemoryHandler`
 
 Automatically injects notifications into LangChain conversation memory as system messages.
@@ -314,8 +342,6 @@ make test-unit
 # Run integration tests only
 make test-integration
 
-# Run contract tests only
-make test-contract
 ```
 
 ### Code Quality
@@ -344,6 +370,100 @@ Run `make help` to see all available commands.
 - Pydantic >=2.0.0
 
 **Note**: Examples using LangChain's legacy APIs (agents, memory, hub) require LangChain <1.0. For LangChain 1.0+, use LangGraph-based workflows.
+
+## Use Cases
+
+LangChain-Drasi enables building reactive, event-driven AI agents by bridging external systems with LangGraph workflows. Drasi continuous queries stream real-time updates that trigger agent state transitions, modify memory, or dynamically control workflow execution—transforming static agents into long-lived, responsive systems.
+
+### 1. Realtime Knowledge Agents
+
+**Example: AI Trading or News Monitoring Agent**
+
+Build agents that maintain evolving understanding of companies or topics. When new market data, filings, or news arrives, Drasi continuous queries detect changes and push updates into LangGraph memory via notification handlers.
+
+The workflow can:
+- Trigger summarization nodes
+- Re-evaluate trading strategy nodes
+- Send alerts when thresholds are crossed
+
+**Key benefits:** Async events changing agent reasoning mid-execution
+
+### 2. Collaborative AI Co-Pilots
+
+**Example: Project Management Assistant (Jira + Slack Integration)**
+
+Create agents that manage "plan and execute" loops. LangChain-Drasi streams updates when:
+- New tickets are created
+- Teammates comment
+- Deployment pipelines fail
+
+The agent dynamically adjusts workflows to:
+- Reassign tasks
+- Summarize recent changes
+- Notify relevant stakeholders
+
+**Key benefits:** Integration with human workflows and reactive decision making
+
+### 3. IoT or Environment-Aware Agents
+
+**Example: Smart Home / Facility Monitoring Agent**
+
+Implement agents following "Observe → Diagnose → Act" patterns. LangChain-Drasi streams sensor data (temperature, occupancy, motion) from Drasi queries, enabling agents to receive events like:
+- "Temperature > 90°F in server room"
+- "Door left open after 10PM"
+
+These trigger subgraph actions such as notifying staff or adjusting systems.
+
+**Key benefits:** Event-driven control loops with context persistence
+
+### 4. Customer Support or CRM AI
+
+**Example: Proactive Customer Agent**
+
+Build agents that track ongoing support tickets and dynamically respond to external updates (customer replies, sentiment scores, transaction data) streamed via Drasi.
+
+The agent can:
+- Update its mental model of customers
+- Suggest next actions
+- Flag escalation workflows
+
+**Key benefits:** Dynamic memory updates and priority re-ranking based on streaming data
+
+### 5. Game or Simulation AI
+
+**Example: Dynamic NPC or Dungeon Master Agent**
+
+Create agents where LangGraph models narrative or game logic, while LangChain-Drasi feeds real-time game state:
+- Player positions
+- Inventory changes
+- Player chat inputs
+
+The AI responds with adaptive storylines or strategic NPC behaviors.
+
+**Key benefits:** Continuous interaction loops and event-driven storytelling
+
+### 7. DevOps or Observability Assistant
+
+**Example: LLM-Augmented Ops Monitor**
+
+Build agents that follow response patterns (detect → diagnose → remediate). Drasi queries monitor logs, metrics, or alerts, and LangChain-Drasi routes these updates into the agent's context, triggering:
+- Log analysis
+- Hypothesis generation
+- Action nodes (restart service, notify engineer)
+
+**Key benefits:** Event-triggered reasoning pipelines integrating with infrastructure telemetry
+
+### 8. Realtime Collaborative Editing / Chat Agents
+
+**Example: Async Group Assistant**
+
+Develop agents for multi-user scenarios where users edit or discuss in real-time. LangChain-Drasi receives streaming edits, comments, or conversation events, enabling agents to:
+- Maintain global context
+- Offer live suggestions
+- Adjust strategies collaboratively
+
+**Key benefits:** Multi-user event synchronization and async context adaptation
+
 
 ## License
 
