@@ -252,6 +252,7 @@ dependencies = [
     { name = "langchain" },
     { name = "langchain-community" },
     { name = "langchain-core" },
+    { name = "langchain-drasi" },
     { name = "langchain-openai" },
     { name = "langchainhub" },
     { name = "langgraph" },
@@ -271,6 +272,7 @@ requires-dist = [
     { name = "langchain", specifier = ">=0.3.0,<1.0.0" },
     { name = "langchain-community", specifier = ">=0.3.0,<1.0.0" },
     { name = "langchain-core", specifier = ">=0.3.0,<1.0.0" },
+    { name = "langchain-drasi", editable = "../../" },
     { name = "langchain-openai", specifier = ">=0.2.0,<1.0.0" },
     { name = "langchainhub", specifier = ">=0.1.0" },
     { name = "langgraph", specifier = ">=0.2.0,<1.0.0" },
@@ -730,6 +732,38 @@ sdist = { url = "https://files.pythonhosted.org/packages/c8/99/f926495f467e0f432
 wheels = [
     { url = "https://files.pythonhosted.org/packages/fc/71/46b0efaf3fc6ad2c2bd600aef500f1cb2b7038a4042f58905805630dd29d/langchain_core-0.3.79-py3-none-any.whl", hash = "sha256:92045bfda3e741f8018e1356f83be203ec601561c6a7becfefe85be5ddc58fdb", size = 449779, upload-time = "2025-10-09T21:59:06.493Z" },
 ]
+
+[[package]]
+name = "langchain-drasi"
+version = "0.1.0"
+source = { editable = "../../" }
+dependencies = [
+    { name = "langchain-core" },
+    { name = "langgraph" },
+    { name = "mcp", extra = ["ws"] },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
+    { name = "langchain", marker = "extra == 'examples'", specifier = ">=0.1.0" },
+    { name = "langchain-core", specifier = ">=0.1.0" },
+    { name = "langchain-openai", marker = "extra == 'examples'", specifier = ">=0.1.0" },
+    { name = "langchain-tests", marker = "extra == 'dev'", specifier = "==0.3.22" },
+    { name = "langgraph", specifier = ">=0.1.0" },
+    { name = "mcp", extras = ["ws"], specifier = ">=1.0.0" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.5.0" },
+    { name = "pydantic", specifier = ">=2.0.0" },
+    { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.4.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1.0" },
+    { name = "pytest-mock", marker = "extra == 'dev'", specifier = ">=3.11.0" },
+    { name = "python-dotenv", marker = "extra == 'examples'", specifier = ">=1.0.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
+]
+provides-extras = ["examples", "dev"]
 
 [[package]]
 name = "langchain-openai"
