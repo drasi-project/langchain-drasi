@@ -146,12 +146,12 @@ Interactive ReAct agents demonstrating automatic notification memory:
 - **langgraph_react.py**: LangGraph ReAct agent with `LangGraphMemoryHandler`
 - **Use case**: Freezer temperature monitoring with real-time alerts
 
-### Terminator Game ([examples/terminator/](examples/terminator/))
+### Invisible Hide and Seek Game ([examples/hide_and_seek/](examples/hide_and_seek/))
 
 Complex LangGraph agent demonstrating custom workflows and notification handling:
 - **Custom LangGraph state machine** that integrates Drasi tool
 - **BufferHandler** for processing real-time player positions
-- **Use case**: AI agent hunts players using Drasi continuous queries
+- **Use case**: AI seeker agents find invisible hiders using Drasi continuous queries
 
 Basic usage demonstrating core functionality
 
