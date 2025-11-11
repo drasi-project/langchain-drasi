@@ -1,4 +1,4 @@
-"""Terminator agent that hunts players using Drasi real-time queries."""
+"""Seeker agent that seeks invisible players using Drasi real-time queries."""
 
 import os
 import httpx
@@ -6,11 +6,11 @@ from langchain_openai import AzureChatOpenAI
 
 from langchain_drasi import create_drasi_tool, MCPConnectionConfig, BufferHandler, ConsoleHandler
 
-from .workflow import build_hunting_workflow, TerminatorState
+from .workflow import build_seeking_workflow, SeekerState
 
 
-class TerminatorAgent:
-    """A terminator agent that hunts players using Drasi for real-time position tracking."""
+class SeekerAgent:
+    """A seeker agent that seeks invisible players using Drasi for real-time position tracking."""
 
     def __init__(
         self,
@@ -46,11 +46,11 @@ class TerminatorAgent:
 
         self.initialized = False
 
-        # Build hunting workflow
-        self.hunting_workflow = build_hunting_workflow(self, self.drasi_tool)
+        # Build seeking workflow
+        self.seeking_workflow = build_seeking_workflow(self, self.drasi_tool)
 
     async def initialize(self) -> None:
-        """Initialize the terminator by creating via API."""
+        """Initialize the seeker by creating via API."""
         try:
             response = await self.http_client.post(
                 "/api/players",
@@ -124,23 +124,23 @@ class TerminatorAgent:
                 self.y = move_data["y"]
                 print(f"[{self.agent_id}] Moved to ({self.x}, {self.y})")
 
-                # Check if any players were eliminated
-                eliminated = move_data.get("eliminated_players", [])
-                for player_id in eliminated:
-                    print(f"[{self.agent_id}] ⚡ ELIMINATED player '{player_id}' at ({self.x},{self.y})!")
+                # Check if any players were found
+                found = move_data.get("eliminated_players", [])
+                for player_id in found:
+                    print(f"[{self.agent_id}] 🎯 FOUND player '{player_id}' at ({self.x},{self.y})!")
                     # Log to buffer so LLM knows this area is now clear
-                    self.custom_log(f"Successfully eliminated player {player_id} at position ({self.x},{self.y})")
+                    self.custom_log(f"Successfully found player {player_id} at position ({self.x},{self.y})")
             except httpx.HTTPStatusError as e:
                 if e.response.status_code == 404:
-                    print(f"[{self.agent_id}] ⚠ Player not found, may have been eliminated")
+                    print(f"[{self.agent_id}] ⚠ Player not found, may have been found by another seeker")
                 else:
                     print(f"[{self.agent_id}] ⚠ Move failed: {e}")
                 return
 
     async def run(self) -> None:
-        """Run the terminator continuously with the hunting workflow."""
+        """Run the seeker continuously with the seeking workflow."""
         # Create initial state
-        initial_state: TerminatorState = {
+        initial_state: SeekerState = {
             "messages": [],
             "current_position": (self.x, self.y),
             "path": [],
@@ -153,9 +153,9 @@ class TerminatorAgent:
         # Run the workflow - it will loop internally with high recursion limit
         config = {"recursion_limit": 10000}
         try:
-            await self.hunting_workflow.ainvoke(initial_state, config=config)
+            await self.seeking_workflow.ainvoke(initial_state, config=config)
         except Exception as e:
-            print(f"[{self.agent_id}] ⚠ Error in hunting workflow: {e}")
+            print(f"[{self.agent_id}] ⚠ Error in seeking workflow: {e}")
 
     async def shutdown(self) -> None:
         try:

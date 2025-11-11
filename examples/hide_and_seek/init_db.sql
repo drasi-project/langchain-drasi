@@ -1,5 +1,5 @@
--- Terminator Game Database Schema
--- This script initializes the PostgreSQL database for the terminator game
+-- Invisible Hide and Seek Game Database Schema
+-- This script initializes the PostgreSQL database for the invisible hide and seek game
 
 -- Drop table if exists
 DROP TABLE IF EXISTS public.player;

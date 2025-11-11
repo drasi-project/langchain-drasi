@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Terminator Game</title>
+    <title>Invisible Hide and Seek</title>
     <style>
         * {
             margin: 0;
@@ -99,7 +99,7 @@
             margin-bottom: 10px;
         }
 
-        .terminated {
+        .found {
             color: #ff0000;
             font-size: 24px;
             font-weight: bold;
@@ -108,7 +108,7 @@
     </style>
 </head>
 <body>
-    <h1>TERMINATOR GAME</h1>
+    <h1>INVISIBLE HIDE AND SEEK</h1>
 
     <div id="login-screen">
         <h2>Enter Your Name</h2>
@@ -127,12 +127,12 @@
         <div id="instructions">
             <p>Use ARROW KEYS to move</p>
             <p><span style="color: #00ff00;">GREEN</span> = You |
-               <span style="color: #00aaff;">BLUE</span> = Other Players |
-               <span style="color: #ff0000;">RED</span> = Terminators</p>
-            <p>Avoid the terminators or you'll be TERMINATED!</p>
+               <span style="color: #00aaff;">BLUE</span> = Other Hiders |
+               <span style="color: #ff0000;">RED</span> = Seekers</p>
+            <p>Avoid the seekers or you'll be FOUND!</p>
         </div>
-        <div id="terminated-message" class="terminated" style="display: none; margin-top: 20px;">
-            YOU HAVE BEEN TERMINATED!
+        <div id="found-message" class="found" style="display: none; margin-top: 20px;">
+            YOU HAVE BEEN FOUND!
         </div>
     </div>
 
@@ -245,9 +245,9 @@
                     // Player removed (from Drasi or manual delete)
                     players.delete(message.player_id);
 
-                    // Check if we were terminated
+                    // Check if we were found
                     if (currentPlayer && message.player_id === currentPlayer.id) {
-                        showTerminated();
+                        showFound();
                     }
                 }
 
@@ -261,8 +261,8 @@
 
         function setupKeyboardControls() {
             document.addEventListener('keydown', async (event) => {
-                if (document.getElementById('terminated-message').style.display !== 'none') {
-                    return; // Can't move if terminated
+                if (document.getElementById('found-message').style.display !== 'none') {
+                    return; // Can't move if found
                 }
 
                 let direction = null;
@@ -288,25 +288,25 @@
                     }
                 } catch (error) {
                     console.error('Move error:', error);
-                    // Check if player was deleted (terminated)
-                    checkIfTerminated();
+                    // Check if player was found
+                    checkIfFound();
                 }
             });
         }
 
-        async function checkIfTerminated() {
+        async function checkIfFound() {
             try {
                 const response = await fetch(`/api/players/${currentPlayer.id}`);
                 if (response.status === 404) {
-                    showTerminated();
+                    showFound();
                 }
             } catch (error) {
                 console.error('Error checking player status:', error);
             }
         }
 
-        function showTerminated() {
-            document.getElementById('terminated-message').style.display = 'block';
+        function showFound() {
+            document.getElementById('found-message').style.display = 'block';
         }
 
         function updatePositionDisplay() {
@@ -343,9 +343,9 @@
                 if (player.id === currentPlayer.id) {
                     color = '#00ff00'; // Green for self
                 } else if (player.type === 'ai') {
-                    color = '#ff0000'; // Red for terminators (AI players)
+                    color = '#ff0000'; // Red for seekers (AI players)
                 } else {
-                    color = '#00aaff'; // Blue for other players
+                    color = '#00aaff'; // Blue for other hiders
                 }
 
                 ctx.fillStyle = color;

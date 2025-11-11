@@ -1,4 +1,4 @@
-"""LangGraph workflow for Terminator hunting behavior."""
+"""LangGraph workflow for Seeker seeking behavior."""
 
 import asyncio
 import json
@@ -30,8 +30,8 @@ def sensor_log_reducer(existing: list[str], new: list[str]) -> list[str]:
     return combined[-50:]
 
 
-class TerminatorState(MessagesState):
-    """State for the terminator workflow."""
+class SeekerState(MessagesState):
+    """State for the seeker workflow."""
     current_position: tuple[int, int]
     path: list[tuple[int, int]]
     current_target: str | None
@@ -44,7 +44,7 @@ class TerminatorState(MessagesState):
 
 def setup_queries_prompt_node(agent):
     """Factory for setup queries prompt node."""
-    async def node(state: TerminatorState) -> TerminatorState:
+    async def node(state: SeekerState) -> SeekerState:
         """Node: Add initial prompt for query setup (only once)."""
         if agent.initialized:
             return state
@@ -63,7 +63,7 @@ Do this now."""
 
 def call_model_node(agent):
     """Factory for call model node."""
-    async def node(state: TerminatorState) -> TerminatorState:
+    async def node(state: SeekerState) -> SeekerState:
         """Node: Call LLM with tools bound."""
         response = await agent.llm.bind_tools([agent.drasi_tool]).ainvoke(state["messages"])
 
@@ -79,7 +79,7 @@ def call_model_node(agent):
 
 def check_sensors_node(agent):
     """Factory for check sensors node."""
-    async def node(state: TerminatorState) -> TerminatorState:
+    async def node(state: SeekerState) -> SeekerState:
         """Node: Wait briefly and check for new notifications."""
         if len(state.get("path", [])) > 0:
             await asyncio.sleep(0.2)
@@ -107,7 +107,7 @@ def check_sensors_node(agent):
 
 def evaluate_targets_node(agent):
     """Factory for evaluate targets node."""
-    async def node(state: TerminatorState) -> TerminatorState:
+    async def node(state: SeekerState) -> SeekerState:
         """Node: Use LLM to extract list of all known targets from sensor data."""
         targets_prompt = build_targets_prompt(state["sensor_log"])
         response = await agent.llm.ainvoke([HumanMessage(content=targets_prompt)])
@@ -130,13 +130,13 @@ def evaluate_targets_node(agent):
 
 def select_and_plan_node(agent):
     """Factory for select and plan node."""
-    async def node(state: TerminatorState) -> TerminatorState:
+    async def node(state: SeekerState) -> SeekerState:
         """Node: Select closest target and plan BFS path (code-based, no LLM)."""
         current_x, current_y = state['current_position']
         known_targets = state.get("known_targets", [])
 
         if not known_targets:
-            print(f"[{agent.agent_id}] No known targets to hunt")
+            print(f"[{agent.agent_id}] No known players to seek")
             # Random patrol
             valid_moves = get_adjacent_positions(current_x, current_y)
             return {"path": [random.choice(valid_moves)], "current_target": None}
@@ -189,7 +189,7 @@ def select_and_plan_node(agent):
 
 def execute_move_node(agent):
     """Factory for execute move node."""
-    async def node(state: TerminatorState) -> TerminatorState:
+    async def node(state: SeekerState) -> SeekerState:
         """Node: Execute the next move in the path."""
         path = state.get("path", [])
         known_targets = state.get("known_targets", [])
@@ -245,9 +245,9 @@ def execute_move_node(agent):
     return node
 
 
-def build_hunting_workflow(agent, drasi_tool) -> StateGraph:
-    """Build the LangGraph workflow for hunting behavior."""
-    workflow = StateGraph(TerminatorState)
+def build_seeking_workflow(agent, drasi_tool) -> StateGraph:
+    """Build the LangGraph workflow for seeking behavior."""
+    workflow = StateGraph(SeekerState)
 
     # Create nodes using factories
     setup_prompt = setup_queries_prompt_node(agent)
@@ -267,7 +267,7 @@ def build_hunting_workflow(agent, drasi_tool) -> StateGraph:
     workflow.add_node("execute_move", execute_move)
 
     # Add edges
-    def route_start(state: TerminatorState) -> str:
+    def route_start(state: SeekerState) -> str:
         """Skip setup if already initialized."""
         if agent.initialized:
             return "check_sensors"
@@ -276,14 +276,14 @@ def build_hunting_workflow(agent, drasi_tool) -> StateGraph:
     workflow.add_conditional_edges(START, route_start, ["setup_queries_prompt", "check_sensors"])
     workflow.add_edge("setup_queries_prompt", "setup_queries_call_model")
 
-    def should_continue_setup(state: TerminatorState) -> str:
+    def should_continue_setup(state: SeekerState) -> str:
         """Check if LLM wants to call more tools."""
         last_message = state["messages"][-1]
         if hasattr(last_message, 'tool_calls') and last_message.tool_calls:
             return "setup_queries_tools"
         return "check_sensors"
 
-    def route_after_wait(state: TerminatorState) -> str:
+    def route_after_wait(state: SeekerState) -> str:
         """Route based on whether we need fresh targets or can proceed."""
         # If reevaluate_plan is True, get fresh targets from LLM
         if state.get("reevaluate_plan", False):
@@ -303,7 +303,7 @@ def build_hunting_workflow(agent, drasi_tool) -> StateGraph:
     workflow.add_conditional_edges("setup_queries_call_model", should_continue_setup, ["setup_queries_tools", "check_sensors"])
     workflow.add_edge("setup_queries_tools", "setup_queries_call_model")  # Loop back for more tool calls
 
-    # Main hunting loop
+    # Main seeking loop
     workflow.add_conditional_edges("check_sensors", route_after_wait, ["evaluate_targets", "select_and_plan", "execute_move"])
     workflow.add_edge("evaluate_targets", "select_and_plan")
     workflow.add_edge("select_and_plan", "execute_move")

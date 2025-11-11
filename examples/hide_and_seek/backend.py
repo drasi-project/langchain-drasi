@@ -1,4 +1,4 @@
-"""FastAPI backend server for the Terminator game.
+"""FastAPI backend server for the Hide and Seek game.
 
 This server provides:
 - Player CRUD operations
@@ -104,7 +104,7 @@ async def lifespan(app: FastAPI):
         print("Database pool closed")
 
 
-app = FastAPI(title="Terminator Game API", lifespan=lifespan)
+app = FastAPI(title="Hide and Seek Game API", lifespan=lifespan)
 
 
 async def broadcast_update(message: dict) -> None:
@@ -236,26 +236,26 @@ async def move_player(player_id: str, move: MoveRequest):
             new_x, new_y, player_id
         )
 
-    # Check for collisions (only if moving player is AI terminator)
+    # Check for collisions (only if moving player is AI seeker)
     eliminated_players = []
     if player_type == "ai":
         async with db_pool.acquire() as conn:
-            # Find human players at the same position
-            caught = await conn.fetch(
+            # Find human players at the same position (they've been found!)
+            found = await conn.fetch(
                 "SELECT id FROM player WHERE x = $1 AND y = $2 AND id != $3 AND type = 'human'",
                 new_x, new_y, player_id
             )
 
-            for caught_player in caught:
-                caught_id = caught_player["id"]
-                # Delete the caught player
-                await conn.execute("DELETE FROM player WHERE id = $1", caught_id)
-                eliminated_players.append(caught_id)
+            for found_player in found:
+                found_id = found_player["id"]
+                # Remove the found player from the game
+                await conn.execute("DELETE FROM player WHERE id = $1", found_id)
+                eliminated_players.append(found_id)
 
-                # Broadcast player elimination
+                # Broadcast that player was found
                 await broadcast_update({
                     "type": "player_left",
-                    "player_id": caught_id
+                    "player_id": found_id
                 })
 
     # Broadcast player moved

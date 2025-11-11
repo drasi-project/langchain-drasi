@@ -1,13 +1,13 @@
-# Makefile for Terminator Game
+# Makefile for Invisible Hide and Seek Game
 
-.PHONY: help install backend terminator init-db setup-env setup clean
+.PHONY: help install backend seeker init-db setup-env setup clean
 
 # Default target - show available commands
 help:
 	@echo "Available targets:"
 	@echo "  make install     - Install dependencies using uv"
 	@echo "  make backend     - Run the backend server"
-	@echo "  make terminator  - Run a terminator agent"
+	@echo "  make seeker      - Run a seeker agent"
 	@echo "  make init-db     - Initialize the database"
 	@echo "  make setup-env   - Create .env from example"
 	@echo "  make setup       - Full setup (env + install)"
@@ -21,9 +21,9 @@ install:
 backend:
 	uv run python backend.py
 
-# Run a terminator agent
-terminator:
-	uv run python terminator.py
+# Run a seeker agent
+seeker:
+	uv run python seeker.py
 
 # Initialize the database
 init-db:
@@ -49,7 +49,7 @@ setup: setup-env install
 	@echo "  2. Run 'make init-db' to initialize the database"
 	@echo "  3. Configure Drasi with resources in resources/"
 	@echo "  4. Run 'make backend' in one terminal"
-	@echo "  5. Run 'make terminator' in another terminal (run multiple times for multiple agents)"
+	@echo "  5. Run 'make seeker' in another terminal (run multiple times for multiple agents)"
 
 # Clean up generated files
 clean:
