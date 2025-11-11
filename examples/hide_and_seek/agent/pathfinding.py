@@ -1,4 +1,4 @@
-"""Pathfinding utilities for Terminator agents."""
+"""Pathfinding utilities for Seeker agents."""
 
 from collections import deque
 

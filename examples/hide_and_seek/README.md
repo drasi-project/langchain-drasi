@@ -1,6 +1,6 @@
-# Terminator Game - langchain-drasi Example
+# Invisible Hide and Seek Game - langchain-drasi Example
 
-A LangGraph agent that uses **langchain-drasi** to hunt players in real-time using Drasi continuous queries.
+A LangGraph agent that uses **langchain-drasi** to seek invisible players in real-time using Drasi continuous queries.
 
 This example demonstrates how to build reactive AI agents that respond to real-time database changes through Drasi's continuous query system.
 
@@ -27,7 +27,7 @@ This example showcases:
 
 ```bash
 # 1. Install dependencies
-cd examples/terminator
+cd examples/hide_and_seek
 uv sync
 
 # 2. Initialize database
@@ -38,7 +38,7 @@ drasi apply -f resources/sources.yaml
 drasi apply -f resources/queries.yaml
 drasi apply -f resources/reaction.yaml
 
-drasi tunnel reaction terminator-mcp 8083
+drasi tunnel reaction seeker-mcp 8083
 
 # 4. Configure environment
 cp .env.example .env
@@ -47,15 +47,15 @@ cp .env.example .env
 # 5. Run backend (terminal 1)
 make backend
 
-# 6. Run terminator agent (terminal 2)
-make terminator
+# 6. Run seeker agent (terminal 2)
+make seeker
 ```
 
 ## How It Works
 
 ### langchain-drasi Integration
 
-The terminator agent demonstrates the core langchain-drasi integration pattern:
+The seeker agent demonstrates the core langchain-drasi integration pattern:
 
 #### 1. Use Built-in Notification Handlers
 
@@ -115,7 +115,7 @@ def sensor_log_reducer(existing: list[str], new: list[str]) -> list[str]:
     combined = existing + new
     return combined[-100:]  # Automatic trimming
 
-class TerminatorState(MessagesState):
+class SeekerState(MessagesState):
     current_position: tuple[int, int]
     path: list[tuple[int, int]]
     current_target: str | None
@@ -134,7 +134,7 @@ The agent uses a custom LangGraph workflow that integrates the Drasi tool:
 from langgraph.graph import StateGraph
 from langgraph.prebuilt import ToolNode
 
-workflow = StateGraph(TerminatorState)
+workflow = StateGraph(SeekerState)
 
 # Add nodes
 workflow.add_node("setup_queries_call_model", call_model_node)
@@ -143,13 +143,13 @@ workflow.add_node("check_sensors", check_sensors_node)
 # ... more nodes
 
 # Compile and run
-hunting_workflow = workflow.compile()
-await hunting_workflow.ainvoke(initial_state)
+seeking_workflow = workflow.compile()
+await seeking_workflow.ainvoke(initial_state)
 ```
 
 ### Agent Workflow State Machine
 
-The terminator uses a LangGraph state machine that demonstrates how to integrate Drasi into an agentic workflow:
+The seeker uses a LangGraph state machine that demonstrates how to integrate Drasi into an agentic workflow:
 
 ```mermaid
 stateDiagram-v2
@@ -177,10 +177,10 @@ stateDiagram-v2
    - **setup_queries_tools** - Executes the Drasi tool calls to subscribe to relevant queries
    - This phase loops until the LLM has discovered and subscribed to all relevant queries
 
-2. **Main Hunting Loop (Continuous)**
+2. **Main Seeking Loop (Continuous)**
    - **check_sensors** - Checks `BufferHandler` for new Drasi notifications
-   - **evaluate_targets** - Uses LLM to parse sensor data and extract target positions
-   - **select_and_plan** - Selects closest target and plans path (code-based, no LLM)
+   - **evaluate_targets** - Uses LLM to parse sensor data and extract hider positions
+   - **select_and_plan** - Selects closest hider and plans path (code-based, no LLM)
    - **execute_move** - Executes the next move via game API
    - Loop continues indefinitely, reacting to new notifications
 
@@ -191,7 +191,7 @@ stateDiagram-v2
 The agent uses the drasi_tool during setup to discover and subscribe to queries:
 
 ```python
-async def call_model_node(state: TerminatorState) -> TerminatorState:
+async def call_model_node(state: SeekerState) -> SeekerState:
     """Call LLM with Drasi tool access."""
     response = await llm.bind_tools([drasi_tool]).ainvoke(state["messages"])
     return {"messages": [response]}
@@ -213,7 +213,7 @@ The LLM then makes tool calls like:
 The workflow continuously checks the `BufferHandler` for new notifications:
 
 ```python
-async def check_sensors(state: TerminatorState) -> TerminatorState:
+async def check_sensors(state: SeekerState) -> SeekerState:
     """Check for new Drasi notifications."""
     await asyncio.sleep(0.5)  # Brief wait
 
@@ -250,13 +250,13 @@ async def check_sensors(state: TerminatorState) -> TerminatorState:
 ### File Structure
 
 ```
-examples/terminator/
+examples/hide_and_seek/
 ├── agent/
-│   ├── terminator.py      # Main TerminatorAgent class with Drasi integration
+│   ├── seeker.py          # Main SeekerAgent class with Drasi integration
 │   ├── workflow.py        # LangGraph workflow state machine with reducers
 │   ├── pathfinding.py     # BFS pathfinding utilities
 │   └── llm_helpers.py     # LLM prompt building and parsing utilities
-├── terminator.py          # Entry point
+├── seeker.py              # Entry point
 ├── backend.py             # Game backend (FastAPI + PostgreSQL)
 ├── game_map.py            # Game map utilities
 └── resources/
@@ -266,7 +266,7 @@ examples/terminator/
 ```
 
 **Focus on these files for langchain-drasi integration:**
-- **`agent/terminator.py`** - Shows how to create and configure the Drasi tool with built-in handlers
+- **`agent/seeker.py`** - Shows how to create and configure the Drasi tool with built-in handlers
 - **`agent/workflow.py`** - LangGraph workflow that uses BufferHandler, state reducers, and the Drasi tool
 - **`backend.py`** - Game backend that generates database changes for Drasi to detect
 

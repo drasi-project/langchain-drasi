@@ -1,6 +1,6 @@
-"""Game map definition and collision detection for the Terminator game.
+"""Game map definition and collision detection for the Invisible Hide and Seek game.
 
-The game is played on a 32x64 grid with walls.
+The game is played on a 64x24 grid with walls.
 """
 
 import random
