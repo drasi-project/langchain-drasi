@@ -1,0 +1,73 @@
+{
+  "name": "Hide and Seek - langchain-drasi",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}/examples/hide_and_seek",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "hostRequirements": {
+    "cpus": 4
+  },
+  "onCreateCommand": "sed -i 's/\\r$//' ../../.devcontainer/hide-and-seek/on-create.sh && sed -i 's/\\r$//' ../../.devcontainer/hide-and-seek/post-create.sh && sed -i 's/\\r$//' ../../.devcontainer/hide-and-seek/post-start.sh && bash ../../.devcontainer/hide-and-seek/on-create.sh",
+  "postCreateCommand": "bash ../../.devcontainer/hide-and-seek/post-create.sh",
+  "postStartCommand": "bash ../../.devcontainer/hide-and-seek/post-start.sh",
+  "runArgs": [
+    "--privileged",
+    "--init",
+    "--ipc=host"
+  ],
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "version": "27",
+      "moby": "false"
+    },
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.11"
+    },
+    "ghcr.io/rio/features/k3d:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {},
+      "extensions": [
+        "ckolkman.vscode-postgres",
+        "ms-python.python"
+      ]
+    }
+  },
+  "containerEnv": {
+    "DB_HOST": "localhost",
+    "DB_PORT": "5432",
+    "DB_USER": "postgres",
+    "DB_PASSWORD": "test",
+    "DB_NAME": "game",
+    "DRASI_SERVER_URL": "http://localhost:8083"
+  },
+  "remoteEnv": {
+    "LOCAL_WORKSPACE_FOLDER": "${localWorkspaceFolder}",
+    "PGHOST": "localhost",
+    "PGDATABASE": "game",
+    "PGPORT": "5432",
+    "PGUSER": "postgres",
+    "PGPASSWORD": "test",
+    "AZURE_OPENAI_API_KEY": "${localEnv:AZURE_OPENAI_API_KEY}",
+    "AZURE_OPENAI_ENDPOINT": "${localEnv:AZURE_OPENAI_ENDPOINT}",
+    "AZURE_OPENAI_DEPLOYMENT": "${localEnv:AZURE_OPENAI_DEPLOYMENT}",
+    "AZURE_OPENAI_API_VERSION": "${localEnv:AZURE_OPENAI_API_VERSION}"
+  },
+  "portsAttributes": {
+    "5432": {
+      "label": "PostgreSQL",
+      "onAutoForward": "silent"
+    },
+    "8000": {
+      "label": "Game Backend",
+      "onAutoForward": "notify"
+    },
+    "8080": {
+      "label": "Traefik (Drasi Ingress)",
+      "onAutoForward": "silent"
+    },
+    "8083": {
+      "label": "Drasi MCP Reaction",
+      "onAutoForward": "silent"
+    }
+  }
+}

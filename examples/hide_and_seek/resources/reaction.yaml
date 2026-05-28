@@ -1,6 +1,6 @@
 kind: Reaction
 apiVersion: v1
-name: terminator-mcp
+name: seeker-mcp
 spec:
   kind: MCP
   queries:

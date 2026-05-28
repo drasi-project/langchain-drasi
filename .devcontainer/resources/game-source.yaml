@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Source
+name: game
+spec:
+  kind: PostgreSQL
+  properties:
+    host: postgres.default.svc.cluster.local
+    port: 5432
+    user: postgres
+    password: test
+    database: game
+    ssl: false
+    tables:
+      - public.player
