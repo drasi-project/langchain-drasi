@@ -28,4 +28,3 @@ spec:
           {
             "description": "Player {{before.id}} is no longer at position ({{before.x}}, {{before.y}})"
           }
----
